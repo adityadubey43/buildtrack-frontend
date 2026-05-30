@@ -132,16 +132,18 @@ export default function SignupPage() {
         },
 
         // 4. On success — verify & create account
+        // Note: for future-start subscriptions (trial flow), razorpay_payment_id
+        // may be absent — backend verifies via Razorpay API instead of HMAC.
         handler: async (response: {
-          razorpay_payment_id: string;
+          razorpay_payment_id?: string;
           razorpay_subscription_id: string;
-          razorpay_signature: string;
+          razorpay_signature?: string;
         }) => {
           try {
             const res = await api.razorpay.verifyAndSignup({
-              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_payment_id: response.razorpay_payment_id ?? "",
               razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_signature: response.razorpay_signature,
+              razorpay_signature: response.razorpay_signature ?? "",
               companyName: form.companyName,
               adminName: form.adminName,
               email: form.email,
