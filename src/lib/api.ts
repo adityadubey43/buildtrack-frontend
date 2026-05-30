@@ -80,6 +80,18 @@ export const api = {
         method: "POST",
         body: JSON.stringify(body),
       }, true), // public — no auth token needed
+
+    // For existing logged-in users activating subscription from dashboard
+    activateSubscription: (body: {
+      razorpay_subscription_id: string;
+      razorpay_payment_id?: string;
+      razorpay_signature?: string;
+    }) =>
+      request<{ success: boolean; message: string; user: AuthUser }>(
+        "/razorpay/activate-subscription",
+        { method: "POST", body: JSON.stringify(body) }
+        // NOTE: no skipAuth — sends bt_token so backend can identify the user
+      ),
   },
 
   // ── Dashboard ──
