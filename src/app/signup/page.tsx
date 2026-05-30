@@ -3,16 +3,72 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, EyeOff, CheckCircle, ArrowRight } from "lucide-react";
+import {
+  Building2, Eye, EyeOff, CheckCircle, ArrowRight,
+  CreditCard, Shield, Clock, AlertCircle,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { setUser, setToken } from "@/lib/store";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Razorpay: any;
+  }
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PLANS = [
+  {
+    id: "basic" as const,
+    name: "Basic",
+    price: "₹999",
+    perMonth: "/mo",
+    desc: "Up to 3 projects, 25 workers",
+    features: ["3 active projects", "25 workers", "Attendance & payroll", "Basic reports"],
+  },
+  {
+    id: "pro" as const,
+    name: "Pro",
+    price: "₹2,499",
+    perMonth: "/mo",
+    desc: "Unlimited projects & workers",
+    popular: true,
+    features: ["Unlimited projects", "Unlimited workers", "DPR & materials", "Advanced analytics", "Equipment tracking"],
+  },
+  {
+    id: "enterprise" as const,
+    name: "Enterprise",
+    price: "₹4,999",
+    perMonth: "/mo",
+    desc: "Large firms, custom SLA",
+    features: ["Everything in Pro", "Priority support", "Custom SLA", "Dedicated onboarding"],
+  },
+];
+
+// ── Load Razorpay script dynamically ──────────────────────────────────────────
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
   const router = useRouter();
+  const [step, setStep] = useState<"form" | "plan" | "payment">("form");
+  const [selectedPlan, setSelectedPlan] = useState<"basic" | "pro" | "enterprise">("pro");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<"form" | "plan">("form");
-  const [selectedPlan, setSelectedPlan] = useState<"basic" | "pro" | "enterprise">("pro");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState("");
+
   const [form, setForm] = useState({
     companyName: "",
     adminName: "",
@@ -20,9 +76,8 @@ export default function SignupPage() {
     password: "",
     phone: "",
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [apiError, setApiError] = useState("");
 
+  // ── Validation ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.companyName.trim()) e.companyName = "Company name is required";
@@ -39,33 +94,85 @@ export default function SignupPage() {
     if (validate()) setStep("plan");
   };
 
-  const handleSignup = async () => {
+  // ── Open Razorpay checkout ──────────────────────────────────────────────────
+  const handleStartPayment = async () => {
     setLoading(true);
     setApiError("");
+
     try {
-      const res = await api.auth.signup({
-        companyName: form.companyName,
-        adminName: form.adminName,
-        email: form.email,
-        password: form.password,
-        phone: form.phone,
+      // 1. Load Razorpay script
+      const ok = await loadRazorpayScript();
+      if (!ok) throw new Error("Could not load payment gateway. Please check your connection.");
+
+      // 2. Create subscription on backend (start_at = now + 7 days → no charge today)
+      const sub = await api.razorpay.createSubscription({
         plan: selectedPlan,
+        email: form.email,
+        companyName: form.companyName,
       });
-      setToken(res.token);
-      setUser(res.user);
-      router.push("/dashboard");
+
+      // 3. Open Razorpay checkout
+      const rzp = new window.Razorpay({
+        key: sub.keyId,
+        subscription_id: sub.subscriptionId,
+        name: "BuildTrack",
+        description: `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Plan — 7-day free trial`,
+        image: "https://buildtrack-api-svpk.onrender.com/uploads/logo.png",
+        prefill: {
+          name: form.adminName,
+          email: form.email,
+          contact: form.phone,
+        },
+        theme: { color: "#f97316" },
+        modal: {
+          ondismiss: () => {
+            setLoading(false);
+            setApiError("Payment cancelled. Please try again to activate your trial.");
+          },
+        },
+
+        // 4. On success — verify & create account
+        handler: async (response: {
+          razorpay_payment_id: string;
+          razorpay_subscription_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const res = await api.razorpay.verifyAndSignup({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature,
+              companyName: form.companyName,
+              adminName: form.adminName,
+              email: form.email,
+              password: form.password,
+              phone: form.phone,
+              plan: selectedPlan,
+            });
+            setToken(res.token);
+            setUser(res.user);
+            router.push("/dashboard");
+          } catch (err: unknown) {
+            setApiError(
+              err instanceof Error
+                ? err.message
+                : "Payment verified but account creation failed. Please contact support."
+            );
+            setLoading(false);
+          }
+        },
+      });
+
+      rzp.open();
     } catch (err: unknown) {
-      setApiError(err instanceof Error ? err.message : "Signup failed. Please try again.");
+      setApiError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setLoading(false);
     }
   };
 
-  const PLANS = [
-    { id: "basic" as const, name: "Basic", price: "₹999/mo", desc: "Up to 3 projects, 25 workers" },
-    { id: "pro" as const, name: "Pro", price: "₹2,499/mo", desc: "Unlimited projects & workers", popular: true },
-    { id: "enterprise" as const, name: "Enterprise", price: "Custom", desc: "Large firms, custom SLA" },
-  ];
+  const planDetails = PLANS.find((p) => p.id === selectedPlan)!;
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Left brand panel */}
@@ -87,7 +194,13 @@ export default function SignupPage() {
             Join 500+ construction companies across India using BuildTrack.
           </p>
           <div className="space-y-4">
-            {["7-day free trial, no credit card", "Your own isolated company workspace", "Mobile-ready for field teams", "GST-ready billing & invoicing"].map((b) => (
+            {[
+              "7-day free trial — cancel anytime",
+              "Your own isolated company workspace",
+              "Mobile-ready for field teams",
+              "GST-ready billing & invoicing",
+              "Auto-billing after trial via UPI / Card",
+            ].map((b) => (
               <div key={b} className="flex items-center gap-3 text-slate-300 text-sm">
                 <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                 {b}
@@ -95,6 +208,31 @@ export default function SignupPage() {
             ))}
           </div>
         </div>
+
+        {/* Step indicator */}
+        <div className="space-y-2">
+          {[
+            { label: "Company Details", s: "form" },
+            { label: "Choose Plan", s: "plan" },
+            { label: "Add Payment Method", s: "payment" },
+          ].map((item, i) => (
+            <div key={item.s} className="flex items-center gap-3">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step === item.s
+                  ? "bg-orange-500 text-white"
+                  : (step === "plan" && i === 0) || (step === "payment" && i <= 1)
+                  ? "bg-green-500 text-white"
+                  : "bg-white/20 text-slate-400"
+              }`}>
+                {(step === "plan" && i === 0) || (step === "payment" && i <= 1) ? "✓" : i + 1}
+              </div>
+              <span className={`text-sm ${step === item.s ? "text-white font-medium" : "text-slate-400"}`}>
+                {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
         <p className="text-slate-500 text-xs">© 2026 BuildTrack. All rights reserved.</p>
       </div>
 
@@ -111,12 +249,14 @@ export default function SignupPage() {
           </div>
 
           {apiError && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">
+            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               {apiError}
             </div>
           )}
 
-          {step === "form" ? (
+          {/* ── Step 1: Company Details ── */}
+          {step === "form" && (
             <>
               <div className="mb-8">
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Create your company account</h1>
@@ -164,23 +304,27 @@ export default function SignupPage() {
                 </div>
 
                 <button type="submit" className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-                  Continue to Plan Selection
-                  <ArrowRight className="w-4 h-4" />
+                  Continue to Plan Selection <ArrowRight className="w-4 h-4" />
                 </button>
 
                 <p className="text-xs text-slate-400 text-center">
-                  By signing up, you agree to our <a href="#" className="text-orange-500">Terms</a> and <a href="#" className="text-orange-500">Privacy Policy</a>
+                  By signing up, you agree to our{" "}
+                  <a href="#" className="text-orange-500">Terms</a> and{" "}
+                  <a href="#" className="text-orange-500">Privacy Policy</a>
                 </p>
               </form>
             </>
-          ) : (
+          )}
+
+          {/* ── Step 2: Plan Selection ── */}
+          {step === "plan" && (
             <>
               <div className="mb-8">
                 <button onClick={() => setStep("form")} className="text-slate-500 text-sm hover:text-orange-500 mb-4 flex items-center gap-1">
                   ← Back
                 </button>
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Choose your plan</h1>
-                <p className="text-slate-500 text-sm">All plans include a 7-day free trial.</p>
+                <p className="text-slate-500 text-sm">All plans include a 7-day free trial. No charge today.</p>
               </div>
 
               <div className="space-y-3 mb-6">
@@ -190,19 +334,22 @@ export default function SignupPage() {
                     onClick={() => setSelectedPlan(plan.id)}
                     className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlan === plan.id ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300"}`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
                           <span className="font-semibold text-slate-900">{plan.name}</span>
                           {"popular" in plan && plan.popular && (
                             <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">Popular</span>
                           )}
                         </div>
-                        <div className="text-slate-500 text-xs mt-0.5">{plan.desc}</div>
+                        <div className="text-slate-500 text-xs">{plan.desc}</div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{plan.price}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === plan.id ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
+                      <div className="flex items-center gap-2 ml-3">
+                        <div className="text-right">
+                          <span className="font-bold text-slate-900">{plan.price}</span>
+                          <span className="text-slate-400 text-xs">{plan.perMonth}</span>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedPlan === plan.id ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
                           {selectedPlan === plan.id && <div className="w-2 h-2 bg-white rounded-full" />}
                         </div>
                       </div>
@@ -212,19 +359,83 @@ export default function SignupPage() {
               </div>
 
               <button
-                onClick={handleSignup}
+                onClick={() => setStep("payment")}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                Continue to Payment <ArrowRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
+
+          {/* ── Step 3: Payment ── */}
+          {step === "payment" && (
+            <>
+              <div className="mb-8">
+                <button onClick={() => setStep("plan")} className="text-slate-500 text-sm hover:text-orange-500 mb-4 flex items-center gap-1">
+                  ← Back
+                </button>
+                <h1 className="text-2xl font-bold text-slate-900 mb-1">Add payment method</h1>
+                <p className="text-slate-500 text-sm">You won't be charged today. Trial starts after you authorize.</p>
+              </div>
+
+              {/* Order summary */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Order Summary</div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-700 font-medium">BuildTrack {planDetails.name}</span>
+                  <span className="font-bold text-slate-900">{planDetails.price}<span className="text-slate-400 font-normal text-xs">/mo</span></span>
+                </div>
+                <div className="flex items-center justify-between text-sm text-slate-500 mb-3">
+                  <span>Company</span>
+                  <span>{form.companyName}</span>
+                </div>
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-700 font-medium">Due today</span>
+                    <span className="text-green-600 font-bold text-lg">₹0</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-400 mt-0.5">
+                    <span>After 7-day trial</span>
+                    <span>{planDetails.price}/month</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Trust signals */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                {[
+                  { icon: Clock, label: "7 days free" },
+                  { icon: Shield, label: "Secure payment" },
+                  { icon: CreditCard, label: "UPI / Card" },
+                ].map(({ icon: Icon, label }) => (
+                  <div key={label} className="flex flex-col items-center gap-1.5 p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <Icon className="w-4 h-4 text-orange-500" />
+                    <span className="text-xs text-slate-600 font-medium">{label}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={handleStartPayment}
                 disabled={loading}
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70 text-base"
               >
                 {loading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Creating your workspace...
+                    Opening payment gateway…
                   </>
                 ) : (
-                  <>Start 7-Day Free Trial <ArrowRight className="w-4 h-4" /></>
+                  <>
+                    <CreditCard className="w-4 h-4" />
+                    Authorise & Start Free Trial
+                  </>
                 )}
               </button>
+
+              <p className="text-xs text-slate-400 text-center mt-3">
+                Powered by Razorpay · 256-bit SSL encryption · Cancel anytime
+              </p>
             </>
           )}
         </div>

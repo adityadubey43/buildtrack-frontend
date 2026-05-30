@@ -52,6 +52,34 @@ export const api = {
       request("/auth/change-password", { method: "PUT", body: JSON.stringify(body) }),
   },
 
+  // ── Razorpay ──
+  razorpay: {
+    config: () =>
+      request<{ success: boolean; keyId: string }>("/razorpay/config"),
+
+    createSubscription: (body: { plan: string; email: string; companyName: string }) =>
+      request<{ success: boolean; subscriptionId: string; keyId: string; amount: number; plan: string }>(
+        "/razorpay/create-subscription",
+        { method: "POST", body: JSON.stringify(body) }
+      ),
+
+    verifyAndSignup: (body: {
+      razorpay_payment_id: string;
+      razorpay_subscription_id: string;
+      razorpay_signature: string;
+      companyName: string;
+      adminName: string;
+      email: string;
+      password: string;
+      phone?: string;
+      plan: string;
+    }) =>
+      request<AuthResponse>("/razorpay/verify-and-signup", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  },
+
   // ── Dashboard ──
   dashboard: {
     stats: () => request<{ success: boolean; data: DashboardStats }>("/dashboard/stats"),
