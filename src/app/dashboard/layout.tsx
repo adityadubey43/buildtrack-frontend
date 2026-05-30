@@ -191,7 +191,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          {/* Trial / expired banner */}
+          {user.planStatus === "trial" && trialDaysLeft <= 7 && (
+            <div className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
+              <span>
+                {trialDaysLeft === 0
+                  ? "⚠️ Your free trial has ended."
+                  : `⏳ Free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""}.`}
+                {" "}Add a payment method to keep access.
+              </span>
+              <Link href="/dashboard/settings?tab=billing" className="bg-white text-orange-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-orange-50">
+                Activate Now
+              </Link>
+            </div>
+          )}
+          {user.planStatus === "expired" && (
+            <div className="px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 bg-red-600 text-white">
+              <span>🔒 Your subscription has expired. Renew to continue using BuildTrack.</span>
+              <Link href="/dashboard/settings?tab=billing" className="bg-white text-red-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-red-50">
+                Renew Now
+              </Link>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );

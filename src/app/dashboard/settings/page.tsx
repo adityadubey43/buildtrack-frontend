@@ -1,8 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Building2, CreditCard, Bell, Shield, Save } from "lucide-react";
-import { getUser, type User } from "@/lib/store";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Building2, CreditCard, Bell, Shield, Save, CheckCircle, Clock, AlertCircle, Zap } from "lucide-react";
+import { getUser, setUser, type User } from "@/lib/store";
+import { api } from "@/lib/api";
+
+declare global { interface Window { Razorpay: any; } } // eslint-disable-line @typescript-eslint/no-explicit-any
+
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 const TABS = [
   { id: "company", label: "Company", icon: Building2 },
@@ -17,17 +32,79 @@ const PLANS = [
   { id: "enterprise", name: "Enterprise", price: "Custom", features: "All features + dedicated support" },
 ];
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("company");
-  const [user, setUser] = useState<User | null>(null);
+const PLAN_PRICES: Record<string, string> = { basic: "₹999", pro: "₹2,499", enterprise: "₹4,999" };
+
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "company");
+  const [user, setUserState] = useState<User | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
+  const [subLoading, setSubLoading] = useState(false);
+  const [subError, setSubError] = useState("");
+  const [subSuccess, setSubSuccess] = useState(false);
 
   useEffect(() => {
-    setUser(getUser());
+    setUserState(getUser());
     setOrigin(window.location.origin);
   }, []);
+
+  const handleActivateSubscription = async () => {
+    if (!user) return;
+    setSubLoading(true);
+    setSubError("");
+    try {
+      const ok = await loadRazorpay();
+      if (!ok) throw new Error("Could not load payment gateway.");
+
+      const sub = await api.razorpay.createSubscription({
+        plan: user.plan || "pro",
+        email: user.email,
+        companyName: user.companyName,
+      });
+
+      const rzp = new window.Razorpay({
+        key: sub.keyId,
+        subscription_id: sub.subscriptionId,
+        name: "BuildTrack",
+        description: `${(user.plan || "pro").charAt(0).toUpperCase() + (user.plan || "pro").slice(1)} Plan — Monthly Subscription`,
+        prefill: { name: user.name, email: user.email },
+        theme: { color: "#f97316" },
+        modal: {
+          ondismiss: () => setSubLoading(false),
+        },
+        handler: async (response: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
+          try {
+            // Verify with backend — updates planStatus to "active" via Razorpay API check
+            const res = await api.razorpay.verifyAndSignup({
+              razorpay_payment_id: response.razorpay_payment_id ?? "",
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature ?? "",
+              companyName: user.companyName,
+              adminName: user.name,
+              email: user.email,
+              password: "__existing_user__", // existing user — backend skips account creation
+              plan: user.plan || "pro",
+            });
+            // Update local user with new planStatus
+            const updated = { ...user, planStatus: res.user.planStatus };
+            setUser(updated);
+            setUserState(updated);
+            setSubSuccess(true);
+          } catch (e: unknown) {
+            setSubError(e instanceof Error ? e.message : "Subscription activation failed.");
+          } finally {
+            setSubLoading(false);
+          }
+        },
+      });
+      rzp.open();
+    } catch (e: unknown) {
+      setSubError(e instanceof Error ? e.message : "Something went wrong.");
+      setSubLoading(false);
+    }
+  };
 
   const loginUrl = user?.slug ? `${origin}/c/${user.slug}` : "";
   const copyLink = () => {
@@ -128,53 +205,107 @@ export default function SettingsPage() {
 
           {activeTab === "billing" && (
             <div>
-              <h2 className="font-bold text-slate-900 text-lg mb-5">Subscription Plan</h2>
+              <h2 className="font-bold text-slate-900 text-lg mb-5">Subscription</h2>
 
-              {/* Current plan */}
-              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 mb-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-orange-600 font-medium mb-1">Current Plan</div>
-                    <div className="font-black text-2xl text-slate-900">Pro</div>
-                    <div className="text-slate-500 text-sm">₹2,499/month · Renews 29 Jun 2026</div>
+              {/* Current plan status */}
+              {(() => {
+                const status = user?.planStatus || "trial";
+                const plan = user?.plan || "pro";
+                const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+                const trialEndsAt = user?.trialEndsAt ? new Date(user.trialEndsAt) : null;
+                const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / 86400000)) : 0;
+
+                return (
+                  <div className={`rounded-2xl p-5 mb-6 border-2 ${
+                    status === "active" ? "bg-green-50 border-green-200" :
+                    status === "trial" && daysLeft <= 2 ? "bg-red-50 border-red-200" :
+                    "bg-orange-50 border-orange-200"
+                  }`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className={`text-xs font-medium mb-1 ${status === "active" ? "text-green-600" : "text-orange-600"}`}>
+                          {status === "active" ? "Active Subscription" : status === "trial" ? "Free Trial" : status === "expired" ? "Trial Expired" : "Subscription"}
+                        </div>
+                        <div className="font-black text-2xl text-slate-900">{planName}</div>
+                        <div className="text-slate-500 text-sm">{PLAN_PRICES[plan]}/month</div>
+                      </div>
+                      <div className="text-right">
+                        {status === "active" ? (
+                          <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full">
+                            <CheckCircle className="w-3 h-3" /> Active
+                          </span>
+                        ) : status === "trial" ? (
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full ${
+                            daysLeft <= 2 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"
+                          }`}>
+                            <Clock className="w-3 h-3" /> {daysLeft} day{daysLeft !== 1 ? "s" : ""} left
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded-full">
+                            <AlertCircle className="w-3 h-3" /> {status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs text-orange-600 font-medium">Trial Status</div>
-                    <div className="font-bold text-slate-900">6 days left</div>
+                );
+              })()}
+
+              {/* Activate subscription CTA */}
+              {user?.planStatus !== "active" && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900">Activate your subscription</div>
+                      <div className="text-sm text-slate-500 mt-0.5">
+                        Pay via UPI, card, or net banking. Your subscription starts immediately and renews monthly.
+                      </div>
+                    </div>
                   </div>
+
+                  {subError && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">
+                      {subError}
+                    </div>
+                  )}
+
+                  {subSuccess ? (
+                    <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Subscription activated! Your plan is now active.
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleActivateSubscription}
+                      disabled={subLoading}
+                      className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                    >
+                      {subLoading ? (
+                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
+                      ) : (
+                        <><CreditCard className="w-4 h-4" /> Pay {PLAN_PRICES[user?.plan || "pro"]}/month via Razorpay</>
+                      )}
+                    </button>
+                  )}
+                  <p className="text-xs text-slate-400 text-center mt-2">Powered by Razorpay · UPI / Cards / Net Banking · Cancel anytime</p>
                 </div>
-              </div>
+              )}
 
-              <h3 className="font-semibold text-slate-800 mb-4">Change Plan</h3>
-              <div className="grid sm:grid-cols-3 gap-4 mb-6">
+              {/* Plan details */}
+              <h3 className="font-semibold text-slate-800 mb-3">Plan Features</h3>
+              <div className="grid sm:grid-cols-3 gap-3">
                 {PLANS.map((plan) => (
-                  <div
-                    key={plan.id}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      plan.id === "pro" ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
+                  <div key={plan.id}
+                    className={`p-4 rounded-xl border-2 transition-all ${plan.id === (user?.plan || "pro") ? "border-orange-500 bg-orange-50" : "border-slate-200"}`}>
                     <div className="font-bold text-slate-900">{plan.name}</div>
                     <div className="text-orange-600 font-semibold text-sm mt-0.5">{plan.price}</div>
                     <div className="text-xs text-slate-500 mt-1">{plan.features}</div>
                   </div>
                 ))}
               </div>
-
-              <div className="bg-slate-50 rounded-xl p-4 mb-5">
-                <div className="text-sm font-medium text-slate-800 mb-2">Payment Method</div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-7 bg-blue-600 rounded flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">VISA</span>
-                  </div>
-                  <span className="text-slate-600 text-sm">•••• •••• •••• 4242</span>
-                </div>
-                <button className="text-xs text-orange-500 mt-2 hover:underline">Change payment method (Razorpay)</button>
-              </div>
-
-              <button className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold">
-                Upgrade via Razorpay
-              </button>
             </div>
           )}
 
@@ -241,5 +372,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-slate-500">Loading...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }
