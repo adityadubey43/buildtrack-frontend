@@ -76,18 +76,13 @@ function SettingsContent() {
         },
         handler: async (response: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
           try {
-            // Verify with backend — updates planStatus to "active" via Razorpay API check
-            const res = await api.razorpay.verifyAndSignup({
-              razorpay_payment_id: response.razorpay_payment_id ?? "",
+            // Use the protected activate endpoint — updates existing tenant, no new account created
+            const res = await api.razorpay.activateSubscription({
               razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_signature: response.razorpay_signature ?? "",
-              companyName: user.companyName,
-              adminName: user.name,
-              email: user.email,
-              password: "__existing_user__", // existing user — backend skips account creation
-              plan: user.plan || "pro",
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
             });
-            // Update local user with new planStatus
+            // Sync updated user to localStorage + state
             const updated = { ...user, planStatus: res.user.planStatus };
             setUser(updated);
             setUserState(updated);
