@@ -3,26 +3,70 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, EyeOff, CheckCircle, ArrowRight } from "lucide-react";
+import {
+  Building2, Eye, EyeOff, CheckCircle, ArrowRight,
+  CreditCard, Clock, Zap,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { setUser, setToken } from "@/lib/store";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+declare global {
+  interface Window { Razorpay: any; } // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const PLANS = [
-  { id: "basic" as const, name: "Basic", price: "₹999/mo", desc: "Up to 3 projects, 25 workers" },
-  { id: "pro" as const, name: "Pro", price: "₹2,499/mo", desc: "Unlimited projects & workers", popular: true },
-  { id: "enterprise" as const, name: "Enterprise", price: "₹4,999/mo", desc: "Large firms, custom SLA" },
+  {
+    id: "basic" as const,
+    name: "Basic",
+    price: "₹999",
+    perMonth: "/mo",
+    desc: "Up to 3 projects, 25 workers",
+    features: ["3 active projects", "25 workers", "Attendance & payroll", "Basic reports"],
+  },
+  {
+    id: "pro" as const,
+    name: "Pro",
+    price: "₹2,499",
+    perMonth: "/mo",
+    desc: "Unlimited projects & workers",
+    popular: true,
+    features: ["Unlimited projects", "Unlimited workers", "DPR & materials", "Advanced analytics", "Equipment tracking"],
+  },
+  {
+    id: "enterprise" as const,
+    name: "Enterprise",
+    price: "₹4,999",
+    perMonth: "/mo",
+    desc: "Large firms, custom SLA",
+    features: ["Everything in Pro", "Priority support", "Custom SLA", "Dedicated onboarding"],
+  },
 ];
 
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function SignupPage() {
   const router = useRouter();
-  const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"form" | "plan">("form");
   const [selectedPlan, setSelectedPlan] = useState<"basic" | "pro" | "enterprise">("pro");
-  const [form, setForm] = useState({ companyName: "", adminName: "", email: "", password: "", phone: "" });
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState<"trial" | "pay" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState("");
+  const [form, setForm] = useState({ companyName: "", adminName: "", email: "", password: "", phone: "" });
 
+  // ── Validation ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.companyName.trim()) e.companyName = "Company name is required";
@@ -39,8 +83,9 @@ export default function SignupPage() {
     if (validate()) setStep("plan");
   };
 
-  const handleSignup = async () => {
-    setLoading(true);
+  // ── Path A: Free trial (no card) ────────────────────────────────────────────
+  const handleStartTrial = async () => {
+    setLoading("trial");
     setApiError("");
     try {
       const res = await api.auth.signup({
@@ -56,10 +101,77 @@ export default function SignupPage() {
       router.push("/dashboard");
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : "Signup failed. Please try again.");
-      setLoading(false);
+      setLoading(null);
     }
   };
 
+  // ── Path B: Pay now (skip trial, activate immediately) ──────────────────────
+  const handlePayNow = async () => {
+    setLoading("pay");
+    setApiError("");
+    try {
+      const ok = await loadRazorpay();
+      if (!ok) throw new Error("Could not load payment gateway. Please check your connection.");
+
+      // Create Razorpay subscription
+      const sub = await api.razorpay.createSubscription({
+        plan: selectedPlan,
+        email: form.email,
+        companyName: form.companyName,
+      });
+
+      // Open Razorpay checkout
+      const rzp = new window.Razorpay({
+        key: sub.keyId,
+        subscription_id: sub.subscriptionId,
+        name: "BuildTrack",
+        description: `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Plan — Monthly Subscription`,
+        prefill: { name: form.adminName, email: form.email, contact: form.phone },
+        theme: { color: "#f97316" },
+        modal: {
+          ondismiss: () => {
+            setLoading(null);
+            setApiError("Payment cancelled. You can still start a free trial instead.");
+          },
+        },
+        handler: async (response: {
+          razorpay_payment_id?: string;
+          razorpay_subscription_id: string;
+          razorpay_signature?: string;
+        }) => {
+          try {
+            // Verify payment + create account in one shot
+            const res = await api.razorpay.verifyAndSignup({
+              razorpay_payment_id: response.razorpay_payment_id ?? "",
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature ?? "",
+              companyName: form.companyName,
+              adminName: form.adminName,
+              email: form.email,
+              password: form.password,
+              phone: form.phone,
+              plan: selectedPlan,
+            });
+            setToken(res.token);
+            setUser(res.user);
+            router.push("/dashboard");
+          } catch (err: unknown) {
+            setApiError(err instanceof Error ? err.message : "Account creation failed after payment. Please contact support.");
+            setLoading(null);
+          }
+        },
+      });
+
+      rzp.open();
+    } catch (err: unknown) {
+      setApiError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setLoading(null);
+    }
+  };
+
+  const planDetails = PLANS.find((p) => p.id === selectedPlan)!;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Left brand panel */}
@@ -74,7 +186,13 @@ export default function SignupPage() {
           <h2 className="text-3xl font-bold text-white mb-4">Start managing your construction sites smarter.</h2>
           <p className="text-slate-300 mb-8">Join 500+ construction companies across India using BuildTrack.</p>
           <div className="space-y-4">
-            {["7-day free trial, no credit card required", "Your own isolated company workspace", "Mobile-ready for field teams", "GST-ready billing & invoicing"].map((b) => (
+            {[
+              "7-day free trial — no card required",
+              "Or subscribe directly and start immediately",
+              "Your own isolated company workspace",
+              "Mobile-ready for field teams",
+              "GST-ready billing & invoicing",
+            ].map((b) => (
               <div key={b} className="flex items-center gap-3 text-slate-300 text-sm">
                 <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />{b}
               </div>
@@ -87,6 +205,7 @@ export default function SignupPage() {
       {/* Right form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
+          {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
@@ -98,7 +217,8 @@ export default function SignupPage() {
             <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">{apiError}</div>
           )}
 
-          {step === "form" ? (
+          {/* ── Step 1: Company Details ── */}
+          {step === "form" && (
             <>
               <div className="mb-8">
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Create your company account</h1>
@@ -107,6 +227,7 @@ export default function SignupPage() {
                   <Link href="/login" className="text-orange-500 hover:underline font-medium">Sign in</Link>
                 </p>
               </div>
+
               <form onSubmit={handleNext} className="space-y-4">
                 {[
                   { key: "companyName", label: "Company Name", placeholder: "Patel Constructions Pvt Ltd", type: "text" },
@@ -125,6 +246,7 @@ export default function SignupPage() {
                     {errors[f.key] && <p className="text-red-500 text-xs mt-1">{errors[f.key]}</p>}
                   </div>
                 ))}
+
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
                   <div className="relative">
@@ -140,6 +262,7 @@ export default function SignupPage() {
                   </div>
                   {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
                 </div>
+
                 <button type="submit" className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
                   Continue to Plan Selection <ArrowRight className="w-4 h-4" />
                 </button>
@@ -148,17 +271,25 @@ export default function SignupPage() {
                 </p>
               </form>
             </>
-          ) : (
+          )}
+
+          {/* ── Step 2: Plan + Payment Choice ── */}
+          {step === "plan" && (
             <>
-              <div className="mb-8">
+              <div className="mb-6">
                 <button onClick={() => setStep("form")} className="text-slate-500 text-sm hover:text-orange-500 mb-4 flex items-center gap-1">← Back</button>
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Choose your plan</h1>
-                <p className="text-slate-500 text-sm">All plans include a 7-day free trial. No credit card required now.</p>
+                <p className="text-slate-500 text-sm">Start free or subscribe directly — your choice.</p>
               </div>
+
+              {/* Plan cards */}
               <div className="space-y-3 mb-6">
                 {PLANS.map((plan) => (
-                  <button key={plan.id} onClick={() => setSelectedPlan(plan.id)}
-                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlan === plan.id ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300"}`}>
+                  <button
+                    key={plan.id}
+                    onClick={() => setSelectedPlan(plan.id)}
+                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${selectedPlan === plan.id ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300"}`}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -170,8 +301,8 @@ export default function SignupPage() {
                         <div className="text-slate-500 text-xs mt-0.5">{plan.desc}</div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{plan.price}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedPlan === plan.id ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
+                        <span className="font-bold text-slate-900">{plan.price}<span className="text-slate-400 font-normal text-xs">{plan.perMonth}</span></span>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedPlan === plan.id ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
                           {selectedPlan === plan.id && <div className="w-2 h-2 bg-white rounded-full" />}
                         </div>
                       </div>
@@ -179,16 +310,61 @@ export default function SignupPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={handleSignup} disabled={loading}
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
-                {loading ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating your workspace...</>
-                ) : (
-                  <>Start 7-Day Free Trial <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
+
+              {/* ── Two CTAs ── */}
+              <div className="space-y-3">
+
+                {/* Option A: Pay now */}
+                <button
+                  onClick={handlePayNow}
+                  disabled={loading !== null}
+                  className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                  {loading === "pay" ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
+                  ) : (
+                    <><Zap className="w-4 h-4" /> Subscribe Now — {planDetails.price}/mo</>
+                  )}
+                </button>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <span className="text-xs text-slate-400 font-medium">or</span>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+
+                {/* Option B: Free trial */}
+                <button
+                  onClick={handleStartTrial}
+                  disabled={loading !== null}
+                  className="w-full py-3.5 border-2 border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-700 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                  {loading === "trial" ? (
+                    <><div className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-500 rounded-full animate-spin" /> Creating workspace...</>
+                  ) : (
+                    <><Clock className="w-4 h-4 text-slate-500" /> Start 7-Day Free Trial</>
+                  )}
+                </button>
+
+              </div>
+
+              {/* Helper text */}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-center">
+                  <Zap className="w-4 h-4 text-orange-500 mx-auto mb-1" />
+                  <div className="text-xs font-semibold text-slate-800">Subscribe Now</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Pay today, use forever</div>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
+                  <Clock className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+                  <div className="text-xs font-semibold text-slate-800">Free Trial</div>
+                  <div className="text-xs text-slate-500 mt-0.5">No card • 7 days free</div>
+                </div>
+              </div>
+
               <p className="text-xs text-slate-400 text-center mt-3">
-                No credit card required. Add payment details after your trial.
+                Payments powered by Razorpay · UPI / Cards / Net Banking
               </p>
             </>
           )}

@@ -193,7 +193,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main className="flex-1 overflow-y-auto">
           {/* Trial / expired banner */}
-          {user.planStatus === "trial" && trialDaysLeft <= 5 && (
+          {user.planStatus === "trial" && trialDaysLeft <= 7 && (
             <div className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
               <span>
                 {trialDaysLeft === 0
