@@ -58,8 +58,8 @@ export const api = {
     config: () =>
       request<{ success: boolean; keyId: string }>("/razorpay/config", {}, true),
 
-    createSubscription: (body: { plan: string; email: string; companyName: string }) =>
-      request<{ success: boolean; subscriptionId: string; keyId: string; amount: number; plan: string }>(
+    createSubscription: (body: { plan: string; billing: "monthly" | "yearly"; email: string; companyName: string }) =>
+      request<{ success: boolean; subscriptionId: string; keyId: string; amount: number; plan: string; billing: string }>(
         "/razorpay/create-subscription",
         { method: "POST", body: JSON.stringify(body) },
         true // public — no auth token needed
