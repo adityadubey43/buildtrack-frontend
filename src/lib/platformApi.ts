@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://buildtrack-api-svpk.onrender.com/api";
 
 const TOKEN_KEY = "bt_platform_token";
 const ADMIN_KEY = "bt_platform_admin";
