@@ -7,9 +7,10 @@ function getToken(): string | null {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  skipAuth = false
 ): Promise<T> {
-  const token = getToken();
+  const token = skipAuth ? null : getToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -55,12 +56,13 @@ export const api = {
   // ── Razorpay ──
   razorpay: {
     config: () =>
-      request<{ success: boolean; keyId: string }>("/razorpay/config"),
+      request<{ success: boolean; keyId: string }>("/razorpay/config", {}, true),
 
     createSubscription: (body: { plan: string; email: string; companyName: string }) =>
       request<{ success: boolean; subscriptionId: string; keyId: string; amount: number; plan: string }>(
         "/razorpay/create-subscription",
-        { method: "POST", body: JSON.stringify(body) }
+        { method: "POST", body: JSON.stringify(body) },
+        true // public — no auth token needed
       ),
 
     verifyAndSignup: (body: {
@@ -77,7 +79,7 @@ export const api = {
       request<AuthResponse>("/razorpay/verify-and-signup", {
         method: "POST",
         body: JSON.stringify(body),
-      }),
+      }, true), // public — no auth token needed
   },
 
   // ── Dashboard ──
