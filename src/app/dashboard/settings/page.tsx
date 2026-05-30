@@ -44,6 +44,7 @@ function SettingsContent() {
   const [subLoading, setSubLoading] = useState(false);
   const [subError, setSubError] = useState("");
   const [subSuccess, setSubSuccess] = useState(false);
+  const [subBilling, setSubBilling] = useState<"monthly" | "yearly">("monthly");
 
   useEffect(() => {
     setUserState(getUser());
@@ -60,6 +61,7 @@ function SettingsContent() {
 
       const sub = await api.razorpay.createSubscription({
         plan: user.plan || "pro",
+        billing: subBilling,
         email: user.email,
         companyName: user.companyName,
       });
@@ -261,6 +263,19 @@ function SettingsContent() {
                     </div>
                   </div>
 
+                  {/* Billing toggle */}
+                  <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 mb-4">
+                    <button onClick={() => setSubBilling("monthly")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${subBilling === "monthly" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>
+                      Monthly — {PLAN_PRICES[user?.plan || "pro"]}/mo
+                    </button>
+                    <button onClick={() => setSubBilling("yearly")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${subBilling === "yearly" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>
+                      Yearly
+                      <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">-10%</span>
+                    </button>
+                  </div>
+
                   {subError && (
                     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">
                       {subError}
@@ -281,7 +296,7 @@ function SettingsContent() {
                       {subLoading ? (
                         <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
                       ) : (
-                        <><CreditCard className="w-4 h-4" /> Pay {PLAN_PRICES[user?.plan || "pro"]}/month via Razorpay</>
+                        <><CreditCard className="w-4 h-4" /> Pay {PLAN_PRICES[user?.plan || "pro"]}/{subBilling === "yearly" ? "yr (10% off)" : "mo"} via Razorpay</>
                       )}
                     </button>
                   )}
