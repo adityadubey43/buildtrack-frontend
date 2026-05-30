@@ -3,21 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Eye, EyeOff, CheckCircle, ArrowRight, CreditCard, Clock, Zap } from "lucide-react";
+import { Building2, Eye, EyeOff, CheckCircle, ArrowRight, Clock, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { setUser, setToken } from "@/lib/store";
 
 declare global { interface Window { Razorpay: any; } } // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// ── Pricing ────────────────────────────────────────────────────────────────────
-const MONTHLY = { basic: 999, pro: 2499, enterprise: 4999 };
-const YEARLY  = {
-  basic:      Math.round(MONTHLY.basic      * 12 * 0.9),
-  pro:        Math.round(MONTHLY.pro        * 12 * 0.9),
-  enterprise: Math.round(MONTHLY.enterprise * 12 * 0.9),
+// ── Pricing ───────────────────────────────────────────────────────────────────
+const MONTHLY: Record<string, number> = { basic: 999, pro: 2499, enterprise: 4999 };
+const YEARLY: Record<string, number>  = {
+  basic:      Math.round(999  * 12 * 0.9),
+  pro:        Math.round(2499 * 12 * 0.9),
+  enterprise: Math.round(4999 * 12 * 0.9),
 };
-const savings = (plan: keyof typeof MONTHLY) =>
-  MONTHLY[plan] * 12 - YEARLY[plan];
 
 const PLANS = [
   { id: "basic"      as const, name: "Basic",      desc: "Up to 3 projects, 25 workers" },
@@ -32,21 +30,20 @@ function loadRazorpay(): Promise<boolean> {
     if (window.Razorpay) return resolve(true);
     const s = document.createElement("script");
     s.src = "https://checkout.razorpay.com/v1/checkout.js";
-    s.onload = () => resolve(true);
-    s.onerror = () => resolve(false);
+    s.onload = () => resolve(true); s.onerror = () => resolve(false);
     document.body.appendChild(s);
   });
 }
 
 export default function SignupPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"form" | "plan">("form");
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+  const [step, setStep]               = useState<"form" | "plan">("form");
+  const [billing, setBilling]         = useState<"monthly" | "yearly">("monthly");
   const [selectedPlan, setSelectedPlan] = useState<"basic" | "pro" | "enterprise">("pro");
-  const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading] = useState<"trial" | "pay" | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [apiError, setApiError] = useState("");
+  const [showPass, setShowPass]       = useState(false);
+  const [loading, setLoading]         = useState<"trial" | "pay" | null>(null);
+  const [errors, setErrors]           = useState<Record<string, string>>({});
+  const [apiError, setApiError]       = useState("");
   const [form, setForm] = useState({ companyName: "", adminName: "", email: "", password: "", phone: "" });
 
   const validate = () => {
@@ -55,11 +52,12 @@ export default function SignupPage() {
     if (!form.adminName.trim())   e.adminName   = "Your name is required";
     if (!form.email.match(/^[^@]+@[^@]+\.[^@]+$/)) e.email = "Valid email required";
     if (form.password.length < 8) e.password = "Min. 8 characters";
-    setErrors(e);
-    return !Object.keys(e).length;
+    setErrors(e); return !Object.keys(e).length;
   };
 
-  const handleNext = (e: React.FormEvent) => { e.preventDefault(); setApiError(""); if (validate()) setStep("plan"); };
+  const handleNext = (e: React.FormEvent) => {
+    e.preventDefault(); setApiError(""); if (validate()) setStep("plan");
+  };
 
   // ── Free trial ──────────────────────────────────────────────────────────────
   const handleStartTrial = async () => {
@@ -67,10 +65,7 @@ export default function SignupPage() {
     try {
       const res = await api.auth.signup({ companyName: form.companyName, adminName: form.adminName, email: form.email, password: form.password, phone: form.phone, plan: selectedPlan });
       setToken(res.token); setUser(res.user); router.push("/dashboard");
-    } catch (err: unknown) {
-      setApiError(err instanceof Error ? err.message : "Signup failed.");
-      setLoading(null);
-    }
+    } catch (err: unknown) { setApiError(err instanceof Error ? err.message : "Signup failed."); setLoading(null); }
   };
 
   // ── Pay now ─────────────────────────────────────────────────────────────────
@@ -80,45 +75,72 @@ export default function SignupPage() {
       const ok = await loadRazorpay();
       if (!ok) throw new Error("Could not load payment gateway.");
 
-      const sub = await api.razorpay.createSubscription({ plan: selectedPlan, billing, email: form.email, companyName: form.companyName });
-
-      const price = billing === "yearly" ? YEARLY[selectedPlan] : MONTHLY[selectedPlan];
       const planName = PLANS.find(p => p.id === selectedPlan)!.name;
-      const billingLabel = billing === "yearly" ? "Yearly (10% off)" : "Monthly";
 
-      const rzp = new window.Razorpay({
-        key: sub.keyId,
-        subscription_id: sub.subscriptionId,
-        name: "BuildTrack",
-        description: `${planName} — ${billingLabel}`,
-        prefill: { name: form.adminName, email: form.email, contact: form.phone },
-        theme: { color: "#f97316" },
-        modal: { ondismiss: () => { setLoading(null); setApiError("Payment cancelled. You can start a free trial instead."); } },
-        handler: async (response: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
-          try {
-            const res = await api.razorpay.verifyAndSignup({
-              razorpay_payment_id: response.razorpay_payment_id ?? "",
-              razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_signature: response.razorpay_signature ?? "",
-              companyName: form.companyName, adminName: form.adminName,
-              email: form.email, password: form.password, phone: form.phone, plan: selectedPlan,
-            });
-            setToken(res.token); setUser(res.user); router.push("/dashboard");
-          } catch (err: unknown) {
-            setApiError(err instanceof Error ? err.message : "Account creation failed. Please contact support.");
-            setLoading(null);
-          }
-        },
-      });
-      rzp.open();
+      if (billing === "yearly") {
+        // ── Yearly: one-time Order ──────────────────────────────────────────
+        const ord = await api.razorpay.createOrder({ plan: selectedPlan, email: form.email, companyName: form.companyName });
+
+        new window.Razorpay({
+          key: ord.keyId,
+          order_id: ord.orderId,
+          name: "BuildTrack",
+          description: `${planName} — Yearly Plan (10% off) · ${fmt(YEARLY[selectedPlan])}/yr`,
+          amount: ord.amount,
+          currency: "INR",
+          prefill: { name: form.adminName, email: form.email, contact: form.phone },
+          theme: { color: "#f97316" },
+          modal: { ondismiss: () => { setLoading(null); setApiError("Payment cancelled."); } },
+          handler: async (r: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              const res = await api.razorpay.verifyAndSignup({
+                razorpay_payment_id: r.razorpay_payment_id,
+                razorpay_order_id: r.razorpay_order_id,
+                razorpay_signature: r.razorpay_signature,
+                companyName: form.companyName, adminName: form.adminName,
+                email: form.email, password: form.password, phone: form.phone,
+                plan: selectedPlan, billing: "yearly",
+              });
+              setToken(res.token); setUser(res.user); router.push("/dashboard");
+            } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
+          },
+        }).open();
+
+      } else {
+        // ── Monthly: Subscription ───────────────────────────────────────────
+        const sub = await api.razorpay.createSubscription({ plan: selectedPlan, email: form.email, companyName: form.companyName });
+
+        new window.Razorpay({
+          key: sub.keyId,
+          subscription_id: sub.subscriptionId,
+          name: "BuildTrack",
+          description: `${planName} — Monthly · ${fmt(MONTHLY[selectedPlan])}/mo`,
+          prefill: { name: form.adminName, email: form.email, contact: form.phone },
+          theme: { color: "#f97316" },
+          modal: { ondismiss: () => { setLoading(null); setApiError("Payment cancelled."); } },
+          handler: async (r: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
+            try {
+              const res = await api.razorpay.verifyAndSignup({
+                razorpay_payment_id: r.razorpay_payment_id ?? "",
+                razorpay_subscription_id: r.razorpay_subscription_id,
+                razorpay_signature: r.razorpay_signature ?? "",
+                companyName: form.companyName, adminName: form.adminName,
+                email: form.email, password: form.password, phone: form.phone,
+                plan: selectedPlan, billing: "monthly",
+              });
+              setToken(res.token); setUser(res.user); router.push("/dashboard");
+            } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
+          },
+        }).open();
+      }
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : "Something went wrong.");
       setLoading(null);
     }
   };
 
-  const price   = billing === "yearly" ? YEARLY[selectedPlan]   : MONTHLY[selectedPlan];
-  const perLabel = billing === "yearly" ? "/yr"                  : "/mo";
+  const price = billing === "yearly" ? YEARLY[selectedPlan] : MONTHLY[selectedPlan];
+  const perLabel = billing === "yearly" ? "/yr" : "/mo";
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -131,8 +153,8 @@ export default function SignupPage() {
         <div>
           <h2 className="text-3xl font-bold text-white mb-4">Start managing your construction sites smarter.</h2>
           <p className="text-slate-300 mb-8">Join 500+ construction companies across India.</p>
-          <div className="space-y-4">
-            {["7-day free trial, no card required", "Monthly or Yearly billing — save 10% yearly", "Your own isolated company workspace", "Mobile-ready for field teams", "GST-ready billing & invoicing"].map((b) => (
+          <div className="space-y-3">
+            {["7-day free trial, no card required", "Monthly billing — auto-renews every month", "Yearly billing — pay once, save 10%", "Your own isolated company workspace", "GST-ready billing & invoicing"].map((b) => (
               <div key={b} className="flex items-center gap-3 text-slate-300 text-sm">
                 <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />{b}
               </div>
@@ -152,7 +174,7 @@ export default function SignupPage() {
 
           {apiError && <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">{apiError}</div>}
 
-          {/* ── Step 1: Company details ── */}
+          {/* Step 1 */}
           {step === "form" && (
             <>
               <div className="mb-8">
@@ -181,7 +203,7 @@ export default function SignupPage() {
                       onChange={(e) => setForm({ ...form, password: e.target.value })}
                       className={`w-full px-4 py-2.5 border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm pr-10 ${errors.password ? "border-red-400" : "border-slate-200"}`} />
                     <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                      {showPass ? <Eye className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <Eye className="w-4 h-4" />
                     </button>
                   </div>
                   {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
@@ -194,30 +216,30 @@ export default function SignupPage() {
             </>
           )}
 
-          {/* ── Step 2: Plan + billing toggle ── */}
+          {/* Step 2 */}
           {step === "plan" && (
             <>
-              <div className="mb-6">
-                <button onClick={() => setStep("form")} className="text-slate-500 text-sm hover:text-orange-500 mb-4 flex items-center gap-1">← Back</button>
+              <div className="mb-5">
+                <button onClick={() => setStep("form")} className="text-slate-500 text-sm hover:text-orange-500 mb-3 flex items-center gap-1">← Back</button>
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Choose your plan</h1>
-                <p className="text-slate-500 text-sm">Start free or subscribe directly — your choice.</p>
+                <p className="text-slate-500 text-sm">Start free or subscribe directly.</p>
               </div>
 
-              {/* ── Billing toggle ── */}
-              <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 mb-6">
+              {/* Billing toggle */}
+              <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 mb-5">
                 <button onClick={() => setBilling("monthly")}
                   className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${billing === "monthly" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
                   Monthly
                 </button>
                 <button onClick={() => setBilling("yearly")}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${billing === "yearly" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${billing === "yearly" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
                   Yearly
-                  <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">-10%</span>
+                  <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">-10%</span>
                 </button>
               </div>
 
-              {/* ── Plan cards ── */}
-              <div className="space-y-3 mb-6">
+              {/* Plan cards */}
+              <div className="space-y-3 mb-5">
                 {PLANS.map((plan) => {
                   const p = billing === "yearly" ? YEARLY[plan.id] : MONTHLY[plan.id];
                   const isSelected = selectedPlan === plan.id;
@@ -230,22 +252,22 @@ export default function SignupPage() {
                             <span className="font-semibold text-slate-900">{plan.name}</span>
                             {"popular" in plan && plan.popular && <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">Popular</span>}
                           </div>
-                          <div className="text-slate-500 text-xs">{plan.desc}</div>
+                          <p className="text-slate-500 text-xs">{plan.desc}</p>
                           {billing === "yearly" && (
-                            <div className="text-green-600 text-xs font-medium mt-1">
-                              Save {fmt(savings(plan.id))}/year
-                            </div>
+                            <p className="text-green-600 text-xs font-medium mt-1">
+                              Save {fmt(MONTHLY[plan.id] * 12 - YEARLY[plan.id])}/year · billed once annually
+                            </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 ml-3">
+                        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                           <div className="text-right">
                             {billing === "yearly" && (
-                              <div className="text-xs text-slate-400 line-through">{fmt(MONTHLY[plan.id] * 12)}/yr</div>
+                              <p className="text-xs text-slate-400 line-through">{fmt(MONTHLY[plan.id] * 12)}/yr</p>
                             )}
-                            <span className="font-bold text-slate-900">{fmt(p)}</span>
-                            <span className="text-slate-400 text-xs">{perLabel}</span>
+                            <p className="font-bold text-slate-900 text-lg">{fmt(p)}<span className="text-slate-400 font-normal text-xs">{perLabel}</span></p>
+                            {billing === "monthly" && <p className="text-xs text-slate-400">per month</p>}
                           </div>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
                             {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
                           </div>
                         </div>
@@ -255,13 +277,24 @@ export default function SignupPage() {
                 })}
               </div>
 
-              {/* ── CTAs ── */}
+              {/* Total banner for yearly */}
+              {billing === "yearly" && (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Total charged today</p>
+                    <p className="text-xs text-slate-500">One-time annual payment · renews next year</p>
+                  </div>
+                  <p className="text-2xl font-black text-green-700">{fmt(YEARLY[selectedPlan])}</p>
+                </div>
+              )}
+
+              {/* CTAs */}
               <div className="space-y-3">
                 <button onClick={handlePayNow} disabled={loading !== null}
                   className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
                   {loading === "pay"
-                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
-                    : <><Zap className="w-4 h-4" /> Subscribe Now — {fmt(price)}{perLabel}</>}
+                    ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Opening payment...</>
+                    : <><Zap className="w-4 h-4" />Subscribe Now — {fmt(price)}{perLabel}</>}
                 </button>
 
                 <div className="flex items-center gap-3">
@@ -273,22 +306,9 @@ export default function SignupPage() {
                 <button onClick={handleStartTrial} disabled={loading !== null}
                   className="w-full py-3.5 border-2 border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-700 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
                   {loading === "trial"
-                    ? <><div className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-500 rounded-full animate-spin" /> Creating workspace...</>
-                    : <><Clock className="w-4 h-4 text-slate-500" /> Start 7-Day Free Trial</>}
+                    ? <><div className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-500 rounded-full animate-spin" />Creating workspace...</>
+                    : <><Clock className="w-4 h-4 text-slate-500" />Start 7-Day Free Trial — No card required</>}
                 </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-center">
-                  <Zap className="w-4 h-4 text-orange-500 mx-auto mb-1" />
-                  <div className="text-xs font-semibold text-slate-800">Subscribe Now</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Pay today, use forever</div>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
-                  <Clock className="w-4 h-4 text-slate-400 mx-auto mb-1" />
-                  <div className="text-xs font-semibold text-slate-800">Free Trial</div>
-                  <div className="text-xs text-slate-500 mt-0.5">No card · 7 days free</div>
-                </div>
               </div>
               <p className="text-xs text-slate-400 text-center mt-3">Powered by Razorpay · UPI / Cards / Net Banking</p>
             </>
