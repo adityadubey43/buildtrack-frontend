@@ -58,16 +58,24 @@ export const api = {
     config: () =>
       request<{ success: boolean; keyId: string }>("/razorpay/config", {}, true),
 
-    createSubscription: (body: { plan: string; billing: "monthly" | "yearly"; email: string; companyName: string }) =>
+    createSubscription: (body: { plan: string; email: string; companyName: string }) =>
       request<{ success: boolean; subscriptionId: string; keyId: string; amount: number; plan: string; billing: string }>(
         "/razorpay/create-subscription",
         { method: "POST", body: JSON.stringify(body) },
-        true // public — no auth token needed
+        true
+      ),
+
+    createOrder: (body: { plan: string; email: string; companyName: string }) =>
+      request<{ success: boolean; orderId: string; keyId: string; amount: number; plan: string; billing: string }>(
+        "/razorpay/create-order",
+        { method: "POST", body: JSON.stringify(body) },
+        true
       ),
 
     verifyAndSignup: (body: {
       razorpay_payment_id: string;
-      razorpay_subscription_id: string;
+      razorpay_subscription_id?: string;
+      razorpay_order_id?: string;
       razorpay_signature: string;
       companyName: string;
       adminName: string;
@@ -75,17 +83,21 @@ export const api = {
       password: string;
       phone?: string;
       plan: string;
+      billing: "monthly" | "yearly";
     }) =>
       request<AuthResponse>("/razorpay/verify-and-signup", {
         method: "POST",
         body: JSON.stringify(body),
-      }, true), // public — no auth token needed
+      }, true),
 
     // For existing logged-in users activating subscription from dashboard
     activateSubscription: (body: {
-      razorpay_subscription_id: string;
-      razorpay_payment_id?: string;
-      razorpay_signature?: string;
+      razorpay_payment_id: string;
+      razorpay_subscription_id?: string;
+      razorpay_order_id?: string;
+      razorpay_signature: string;
+      billing: "monthly" | "yearly";
+      plan?: string;
     }) =>
       request<{ success: boolean; message: string; user: AuthUser }>(
         "/razorpay/activate-subscription",

@@ -45,11 +45,20 @@ function SettingsContent() {
   const [subError, setSubError] = useState("");
   const [subSuccess, setSubSuccess] = useState(false);
   const [subBilling, setSubBilling] = useState<"monthly" | "yearly">("monthly");
+  const [subPlan, setSubPlan] = useState<string>("pro");
 
   useEffect(() => {
     setUserState(getUser());
     setOrigin(window.location.origin);
   }, []);
+
+  const MONTHLY_P: Record<string, number> = { basic: 999, pro: 2499, enterprise: 4999 };
+  const YEARLY_P:  Record<string, number> = {
+    basic:      Math.round(999  * 12 * 0.9),
+    pro:        Math.round(2499 * 12 * 0.9),
+    enterprise: Math.round(4999 * 12 * 0.9),
+  };
+  const fmtP = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
   const handleActivateSubscription = async () => {
     if (!user) return;
@@ -59,44 +68,59 @@ function SettingsContent() {
       const ok = await loadRazorpay();
       if (!ok) throw new Error("Could not load payment gateway.");
 
-      const sub = await api.razorpay.createSubscription({
-        plan: user.plan || "pro",
-        billing: subBilling,
-        email: user.email,
-        companyName: user.companyName,
-      });
+      const planName = subPlan.charAt(0).toUpperCase() + subPlan.slice(1);
 
-      const rzp = new window.Razorpay({
-        key: sub.keyId,
-        subscription_id: sub.subscriptionId,
-        name: "BuildTrack",
-        description: `${(user.plan || "pro").charAt(0).toUpperCase() + (user.plan || "pro").slice(1)} Plan — Monthly Subscription`,
-        prefill: { name: user.name, email: user.email },
-        theme: { color: "#f97316" },
-        modal: {
-          ondismiss: () => setSubLoading(false),
-        },
-        handler: async (response: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
-          try {
-            // Use the protected activate endpoint — updates existing tenant, no new account created
-            const res = await api.razorpay.activateSubscription({
-              razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            // Sync updated user to localStorage + state
-            const updated = { ...user, planStatus: res.user.planStatus };
-            setUser(updated);
-            setUserState(updated);
-            setSubSuccess(true);
-          } catch (e: unknown) {
-            setSubError(e instanceof Error ? e.message : "Subscription activation failed.");
-          } finally {
-            setSubLoading(false);
-          }
-        },
-      });
-      rzp.open();
+      if (subBilling === "yearly") {
+        // ── Yearly: one-time Order ──────────────────────────────────────────
+        const ord = await api.razorpay.createOrder({ plan: subPlan, email: user.email, companyName: user.companyName });
+        new window.Razorpay({
+          key: ord.keyId, order_id: ord.orderId,
+          name: "BuildTrack",
+          description: `${planName} — Yearly (10% off) · ${fmtP(YEARLY_P[subPlan])}/yr`,
+          amount: ord.amount, currency: "INR",
+          prefill: { name: user.name, email: user.email },
+          theme: { color: "#f97316" },
+          modal: { ondismiss: () => setSubLoading(false) },
+          handler: async (r: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              const res = await api.razorpay.activateSubscription({
+                razorpay_payment_id: r.razorpay_payment_id,
+                razorpay_order_id: r.razorpay_order_id,
+                razorpay_signature: r.razorpay_signature,
+                billing: "yearly", plan: subPlan,
+              });
+              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
+              setUser(updated); setUserState(updated); setSubSuccess(true);
+            } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
+            finally { setSubLoading(false); }
+          },
+        }).open();
+
+      } else {
+        // ── Monthly: Subscription ───────────────────────────────────────────
+        const sub = await api.razorpay.createSubscription({ plan: subPlan, email: user.email, companyName: user.companyName });
+        new window.Razorpay({
+          key: sub.keyId, subscription_id: sub.subscriptionId,
+          name: "BuildTrack",
+          description: `${planName} — Monthly · ${fmtP(MONTHLY_P[subPlan])}/mo`,
+          prefill: { name: user.name, email: user.email },
+          theme: { color: "#f97316" },
+          modal: { ondismiss: () => setSubLoading(false) },
+          handler: async (r: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
+            try {
+              const res = await api.razorpay.activateSubscription({
+                razorpay_payment_id: r.razorpay_payment_id ?? "",
+                razorpay_subscription_id: r.razorpay_subscription_id,
+                razorpay_signature: r.razorpay_signature ?? "",
+                billing: "monthly", plan: subPlan,
+              });
+              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
+              setUser(updated); setUserState(updated); setSubSuccess(true);
+            } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
+            finally { setSubLoading(false); }
+          },
+        }).open();
+      }
     } catch (e: unknown) {
       setSubError(e instanceof Error ? e.message : "Something went wrong.");
       setSubLoading(false);
@@ -248,64 +272,91 @@ function SettingsContent() {
                 );
               })()}
 
-              {/* Activate subscription CTA */}
+              {/* Activate / Change subscription */}
               {user?.planStatus !== "active" && (
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6">
-                  <div className="flex items-start gap-3 mb-4">
+                  <div className="flex items-start gap-3 mb-5">
                     <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <Zap className="w-5 h-5 text-orange-500" />
                     </div>
                     <div>
                       <div className="font-semibold text-slate-900">Activate your subscription</div>
-                      <div className="text-sm text-slate-500 mt-0.5">
-                        Pay via UPI, card, or net banking. Your subscription starts immediately and renews monthly.
-                      </div>
+                      <div className="text-sm text-slate-500 mt-0.5">Choose your plan and billing cycle, then pay via UPI, card, or net banking.</div>
                     </div>
+                  </div>
+
+                  {/* Plan selector */}
+                  <div className="space-y-2 mb-4">
+                    {PLANS.map((plan) => {
+                      const mp = { basic: 999, pro: 2499, enterprise: 4999 }[plan.id as "basic"|"pro"|"enterprise"];
+                      const yp = Math.round(mp * 12 * 0.9);
+                      const p  = subBilling === "yearly" ? yp : mp;
+                      const lbl = subBilling === "yearly" ? "/yr" : "/mo";
+                      const isSelected = subPlan === plan.id;
+                      return (
+                        <button key={plan.id} onClick={() => setSubPlan(plan.id)}
+                          className={`w-full p-3 rounded-xl border-2 text-left transition-all flex items-center justify-between ${isSelected ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300 bg-white"}`}>
+                          <div>
+                            <span className="font-semibold text-slate-900 text-sm">{plan.name}</span>
+                            <span className="text-slate-500 text-xs ml-2">{plan.features}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-sm">₹{p.toLocaleString("en-IN")}<span className="text-slate-400 font-normal text-xs">{lbl}</span></span>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-orange-500 bg-orange-500" : "border-slate-300"}`}>
+                              {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Billing toggle */}
-                  <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 mb-4">
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 mb-4">
                     <button onClick={() => setSubBilling("monthly")}
                       className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${subBilling === "monthly" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>
-                      Monthly — {PLAN_PRICES[user?.plan || "pro"]}/mo
+                      Monthly
                     </button>
                     <button onClick={() => setSubBilling("yearly")}
                       className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${subBilling === "yearly" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>
-                      Yearly
-                      <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">-10%</span>
+                      Yearly <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">-10%</span>
                     </button>
                   </div>
 
-                  {subError && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">
-                      {subError}
-                    </div>
-                  )}
+                  {/* Yearly total banner */}
+                  {subBilling === "yearly" && (() => {
+                    const yp = Math.round({ basic: 999, pro: 2499, enterprise: 4999 }[subPlan as "basic"|"pro"|"enterprise"] * 12 * 0.9);
+                    return (
+                      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">Total charged today</p>
+                          <p className="text-xs text-slate-500">One-time annual payment · renews in 1 year</p>
+                        </div>
+                        <p className="text-xl font-black text-green-700">₹{yp.toLocaleString("en-IN")}</p>
+                      </div>
+                    );
+                  })()}
+
+                  {subError && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">{subError}</div>}
 
                   {subSuccess ? (
                     <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      Subscription activated! Your plan is now active.
+                      <CheckCircle className="w-4 h-4" /> Subscription activated! Your plan is now active.
                     </div>
                   ) : (
-                    <button
-                      onClick={handleActivateSubscription}
-                      disabled={subLoading}
-                      className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                    >
-                      {subLoading ? (
-                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
-                      ) : (
-                        <><CreditCard className="w-4 h-4" /> Pay {PLAN_PRICES[user?.plan || "pro"]}/{subBilling === "yearly" ? "yr (10% off)" : "mo"} via Razorpay</>
-                      )}
+                    <button onClick={handleActivateSubscription} disabled={subLoading}
+                      className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
+                      {subLoading
+                        ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Opening payment...</>
+                        : <><CreditCard className="w-4 h-4" /> Pay via Razorpay</>}
                     </button>
                   )}
-                  <p className="text-xs text-slate-400 text-center mt-2">Powered by Razorpay · UPI / Cards / Net Banking · Cancel anytime</p>
+                  <p className="text-xs text-slate-400 text-center mt-2">Powered by Razorpay · UPI / Cards / Net Banking</p>
                 </div>
               )}
 
-              {/* Plan details */}
-              <h3 className="font-semibold text-slate-800 mb-3">Plan Features</h3>
+              {/* Plan overview */}
+              <h3 className="font-semibold text-slate-800 mb-3">All Plans</h3>
               <div className="grid sm:grid-cols-3 gap-3">
                 {PLANS.map((plan) => (
                   <div key={plan.id}
