@@ -207,9 +207,9 @@ export const api = {
     list: (params?: Record<string, string>) =>
       request<ListResponse<Invoice>>(`/invoices${toQuery(params)}`),
     get: (id: string) => request<SingleResponse<Invoice>>(`/invoices/${id}`),
-    create: (body: Partial<Invoice>) =>
+    create: (body: InvoiceInput) =>
       request<SingleResponse<Invoice>>("/invoices", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<Invoice>) =>
+    update: (id: string, body: Partial<InvoiceInput>) =>
       request<SingleResponse<Invoice>>(`/invoices/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     recordPayment: (id: string, body: { amount: number; date: string; mode?: string; reference?: string }) =>
       request<SingleResponse<Invoice>>(`/invoices/${id}/payment`, { method: "POST", body: JSON.stringify(body) }),
@@ -499,13 +499,24 @@ export interface MaterialTransaction {
   notes?: string;
 }
 
+export interface InvoiceItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
 export interface Invoice {
   _id: string;
   invoiceNumber: string;
   project: { _id: string; name: string };
   clientName: string;
+  clientAddress?: string;
+  clientGST?: string;
   milestone?: string;
+  items: InvoiceItem[];
   subtotal: number;
+  gstRate: number;
   gstAmount: number;
   totalAmount: number;
   paidAmount: number;
@@ -514,6 +525,21 @@ export interface Invoice {
   dueDate: string;
   status: string;
   payments: { amount: number; date: string; mode: string }[];
+  notes?: string;
+}
+
+export interface InvoiceInput {
+  project: string;
+  clientName: string;
+  clientAddress?: string;
+  clientGST?: string;
+  milestone?: string;
+  items: InvoiceItem[];
+  gstRate?: number;
+  invoiceDate: string;
+  dueDate: string;
+  notes?: string;
+  status?: string;
 }
 
 export interface InvoiceSummary {
