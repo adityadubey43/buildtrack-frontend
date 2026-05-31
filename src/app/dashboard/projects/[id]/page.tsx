@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { getUser } from "@/lib/store";
 import { canSeeFinance } from "@/lib/permissions";
+import { formatTimeToIST } from "@/lib/time";
 import {
   ArrowLeft, MapPin, Calendar, Building2, AlertTriangle, TrendingUp, TrendingDown,
   Wallet, DollarSign, Receipt, FileText, Camera, Layers, Users,
@@ -399,7 +400,7 @@ export default function ProjectDetailPage() {
                           <td className="py-2.5 pr-3 font-medium text-slate-800">{a.worker?.name || "—"}</td>
                           <td className="py-2.5 pr-3 text-slate-500 capitalize">{a.worker?.role || "—"}</td>
                           <td className="py-2.5 pr-3 text-slate-500">{fmtDate(a.date)}</td>
-                          <td className="py-2.5 pr-3 text-slate-500">{a.timeIn || "—"}</td>
+                          <td className="py-2.5 pr-3 text-slate-500">{formatTimeToIST(a.checkInAt ?? a.timeIn)}</td>
                           <td className="py-2.5 pr-3 text-slate-500">{a.overtimeHours ? `${a.overtimeHours}h` : "—"}</td>
                           <td className="py-2.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_BADGE[a.status] || "bg-slate-100 text-slate-600"}`}>
