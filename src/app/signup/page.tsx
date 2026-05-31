@@ -119,11 +119,12 @@ export default function SignupPage() {
           theme: { color: "#f97316" },
           modal: { ondismiss: () => { setLoading(null); setApiError("Payment cancelled."); } },
           handler: async (r: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
+            console.log("[Razorpay subscription handler]", r);
             try {
               const res = await api.razorpay.verifyAndSignup({
-                razorpay_payment_id: r.razorpay_payment_id ?? "",
+                razorpay_payment_id: r.razorpay_payment_id || "",
                 razorpay_subscription_id: r.razorpay_subscription_id,
-                razorpay_signature: r.razorpay_signature ?? "",
+                razorpay_signature: r.razorpay_signature || "",
                 companyName: form.companyName, adminName: form.adminName,
                 email: form.email, password: form.password, phone: form.phone,
                 plan: selectedPlan, billing: "monthly",
