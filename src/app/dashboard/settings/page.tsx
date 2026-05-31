@@ -254,7 +254,12 @@ function SettingsContent() {
                           {status === "active" ? "Active Subscription" : status === "trial" ? "Free Trial" : status === "expired" ? "Trial Expired" : "Subscription"}
                         </div>
                         <div className="font-black text-2xl text-slate-900">{planName}</div>
-                        <div className="text-slate-500 text-sm">{PLAN_PRICES[plan]}/month</div>
+                        <div className="text-slate-500 text-sm">
+                          {PLAN_PRICES[plan]}/month
+                          {status === "active" && user?.subscriptionEndsAt
+                            ? " · Yearly"
+                            : status === "active" ? " · Monthly auto-renewal" : ""}
+                        </div>
                       </div>
                       <div className="text-right">
                         {status === "active" ? (
@@ -274,6 +279,47 @@ function SettingsContent() {
                         )}
                       </div>
                     </div>
+
+                    {/* Subscription dates */}
+                    {status === "active" && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
+                        {user?.subscriptionStartedAt && (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Started</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {new Date(user.subscriptionStartedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                        )}
+                        {user?.subscriptionEndsAt ? (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Renews On</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {new Date(user.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {Math.max(0, Math.ceil((new Date(user.subscriptionEndsAt).getTime() - Date.now()) / 86400000))} days remaining
+                            </p>
+                          </div>
+                        ) : status === "active" ? (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Billing</p>
+                            <p className="text-sm font-semibold text-slate-800">Monthly</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Auto-renews via Razorpay</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Trial dates */}
+                    {status === "trial" && user?.trialEndsAt && (
+                      <div className="mt-4 pt-4 border-t border-slate-100">
+                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Trial Ends</p>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {new Date(user.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
