@@ -44,7 +44,7 @@ export default function ExpensesPage() {
     if (filterTo) params.endDate = filterTo;
     try {
       const res = await api.expenses.list(params);
-      setExpenses(res.data);
+      setExpenses([...res.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -189,7 +189,7 @@ export default function ExpensesPage() {
               )}
             </div>
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-slate-50 overflow-y-auto max-h-[420px]">
               {expenses.map((exp) => (
                 <div key={exp._id} className="flex items-center gap-3 px-4 lg:px-5 py-3.5 hover:bg-slate-50 transition-colors">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize flex-shrink-0 w-24 text-center ${TYPE_COLORS[exp.type] || "bg-slate-100 text-slate-600"}`}>

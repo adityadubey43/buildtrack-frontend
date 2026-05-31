@@ -54,13 +54,9 @@ export function AddTeamMemberModal({
       });
       
       console.log("✅ Team member created:", res);
-      setSuccessMsg(`✓ ${form.name} added as team member. They can log in with their email & password.`);
-      
-      setTimeout(() => {
-        setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "" });
-        onSaved();
-        onClose();
-      }, 1500);
+      onSaved();
+      onClose();
+      setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "" });
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : "Failed to save.";
       console.error("❌ Error creating team member:", errorMsg, e);

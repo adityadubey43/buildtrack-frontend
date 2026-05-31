@@ -43,7 +43,7 @@ export default function PaymentsPage() {
     if (filterTo) params.endDate = filterTo;
     try {
       const res = await api.payments.list(params);
-      setPayments(res.data);
+      setPayments([...res.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -162,7 +162,7 @@ export default function PaymentsPage() {
               )}
             </div>
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y divide-slate-50 overflow-y-auto max-h-[420px]">
               {payments.map((pay) => (
                 <div key={pay._id} className="flex items-center gap-3 px-4 lg:px-5 py-3.5 hover:bg-slate-50 transition-colors">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize flex-shrink-0 w-20 text-center ${MODE_COLORS[pay.paymentMode] || "bg-slate-100 text-slate-600"}`}>

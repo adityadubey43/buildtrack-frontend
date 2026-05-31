@@ -74,7 +74,6 @@ export function AddStaffMemberModal({
 
         const res = await api.workers.update(editingStaff._id, updateBody);
         console.log("✅ Staff member updated:", res);
-        setSuccessMsg(`✓ ${form.name} updated successfully.`);
       } else {
         const payload = {
           name: form.name,
@@ -90,16 +89,12 @@ export function AddStaffMemberModal({
         } as any;
 
         const res = await api.workers.create(payload);
-        
         console.log("✅ Staff member created:", res);
-        setSuccessMsg(`✓ ${form.name} added as staff member. They can log in with their email & password.`);
       }
-      
-      setTimeout(() => {
-        setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "" });
-        onSaved();
-        onClose();
-      }, 1500);
+
+      onSaved();
+      onClose();
+      setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "" });
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : "Failed to save.";
       console.error(`❌ Error ${isEditMode ? "updating" : "creating"} staff member:`, errorMsg, e);
