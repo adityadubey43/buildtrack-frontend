@@ -201,10 +201,11 @@ export default function PlatformDashboard() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {companies.map((c) => {
-                  const isYearly   = c.billingCycle === "yearly";
-                  const startedAt  = c.subscriptionStartedAt;
-                  const endsAt     = c.subscriptionEndsAt || c.trialEndsAt;
+                  const endsAt     = c.subscriptionEndsAt || (c.planStatus === "active" ? c.trialEndsAt : undefined);
                   const daysLeft   = endsAt ? Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86400000)) : null;
+                  // Yearly = has an end date AND that date is more than 30 days away (trial users have short endsAt)
+                  const isYearly   = c.planStatus === "active" && daysLeft !== null && daysLeft > 30;
+                  const startedAt  = c.subscriptionStartedAt;
                   const isExpiring = daysLeft !== null && daysLeft <= 7 && c.planStatus === "active";
 
                   return (
