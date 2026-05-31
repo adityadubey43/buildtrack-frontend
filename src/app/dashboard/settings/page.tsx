@@ -107,11 +107,12 @@ function SettingsContent() {
           theme: { color: "#f97316" },
           modal: { ondismiss: () => setSubLoading(false) },
           handler: async (r: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
+            console.log("[Razorpay subscription handler]", r);
             try {
               const res = await api.razorpay.activateSubscription({
-                razorpay_payment_id: r.razorpay_payment_id ?? "",
+                razorpay_payment_id: r.razorpay_payment_id || "",
                 razorpay_subscription_id: r.razorpay_subscription_id,
-                razorpay_signature: r.razorpay_signature ?? "",
+                razorpay_signature: r.razorpay_signature || "",
                 billing: "monthly", plan: subPlan,
               });
               const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
