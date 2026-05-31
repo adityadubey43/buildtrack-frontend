@@ -5,11 +5,11 @@ import { Receipt, Plus, CheckCircle, Clock, AlertCircle, Loader2, FileText } fro
 import { api, type Invoice, type Project } from "@/lib/api";
 
 const STATUS: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  sent:     { label: "Sent",     color: "bg-blue-100 text-blue-700",   icon: Clock },
-  paid:     { label: "Paid",     color: "bg-green-100 text-green-700", icon: CheckCircle },
-  overdue:  { label: "Overdue",  color: "bg-red-100 text-red-700",     icon: AlertCircle },
-  draft:    { label: "Draft",    color: "bg-slate-100 text-slate-600", icon: FileText },
-  partial:  { label: "Partial",  color: "bg-yellow-100 text-yellow-700", icon: Clock },
+  sent:           { label: "Sent",           color: "bg-blue-100 text-blue-700",   icon: Clock },
+  paid:           { label: "Paid",           color: "bg-green-100 text-green-700", icon: CheckCircle },
+  overdue:        { label: "Overdue",        color: "bg-red-100 text-red-700",     icon: AlertCircle },
+  draft:          { label: "Draft",          color: "bg-slate-100 text-slate-600", icon: FileText },
+  "partially-paid": { label: "Partial",      color: "bg-yellow-100 text-yellow-700", icon: Clock },
 };
 
 function fmt(n: number) { return `₹${n.toLocaleString("en-IN")}`; }
@@ -20,7 +20,10 @@ export default function BillingPage() {
   const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving]       = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const [form, setForm] = useState({ project: "", clientName: "", milestone: "", amount: "", dueDate: "" });
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: "", date: "", mode: "bank", reference: "", notes: "" });
 
   useEffect(() => {
     Promise.all([api.invoices.list(), api.projects.list()])
@@ -29,7 +32,7 @@ export default function BillingPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalRevenue = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.totalAmount, 0);
+  const totalRevenue = invoices.reduce((s, i) => s + i.paidAmount, 0);
   const totalPending = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.balanceAmount, 0);
   const totalOverdue = invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.balanceAmount, 0);
 
@@ -62,11 +65,43 @@ export default function BillingPage() {
     finally { setSaving(false); }
   };
 
-  const markPaid = async (id: string) => {
+  const openPaymentModal = (invoice: Invoice) => {
+    setPaymentInvoice(invoice);
+    setPaymentForm({
+      amount: invoice.balanceAmount.toString(),
+      date: new Date().toISOString().split("T")[0],
+      mode: "bank",
+      reference: "",
+      notes: "",
+    });
+  };
+
+  const closePaymentModal = () => {
+    setPaymentInvoice(null);
+    setPaymentForm({ amount: "", date: "", mode: "bank", reference: "", notes: "" });
+  };
+
+  const submitPayment = async () => {
+    if (!paymentInvoice || !paymentForm.amount || !paymentForm.date) return;
+    const amount = parseFloat(paymentForm.amount);
+    if (Number.isNaN(amount) || amount <= 0) return;
+
+    setPaymentSaving(true);
     try {
-      const inv = await api.invoices.update(id, { status: "paid" });
-      setInvoices((prev) => prev.map(i => i._id === id ? inv.data : i));
-    } catch (err) { console.error(err); }
+      const inv = await api.invoices.recordPayment(paymentInvoice._id, {
+        amount,
+        date: paymentForm.date,
+        mode: paymentForm.mode,
+        reference: paymentForm.reference,
+        notes: paymentForm.notes,
+      });
+      setInvoices((prev) => prev.map((i) => i._id === paymentInvoice._id ? inv.data : i));
+      closePaymentModal();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPaymentSaving(false);
+    }
   };
 
   if (loading) return (
@@ -148,9 +183,9 @@ export default function BillingPage() {
                       </td>
                       <td className="px-4 py-3">
                         {inv.status !== "paid" && (
-                          <button onClick={() => markPaid(inv._id)}
+                          <button onClick={() => openPaymentModal(inv)}
                             className="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded-lg transition-colors">
-                            Mark Paid
+                            Record Payment
                           </button>
                         )}
                       </td>
@@ -206,6 +241,76 @@ export default function BillingPage() {
               <button onClick={handleCreate} disabled={saving || !form.project || !form.clientName || !form.amount}
                 className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold disabled:opacity-60">
                 {saving ? "Saving..." : "Generate Invoice"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentInvoice && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h2 className="font-bold text-slate-900">Record Payment</h2>
+                <p className="text-sm text-slate-500">Invoice {paymentInvoice.invoiceNumber} · {paymentInvoice.project?.name || "Project"}</p>
+              </div>
+              <button onClick={closePaymentModal} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="font-medium">Amount due</div>
+                <div className="text-xl font-semibold text-slate-900">{fmt(paymentInvoice.balanceAmount)}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Paid Amount</label>
+                <input type="number" min="0" step="0.01" value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Date</label>
+                <input type="date" value={paymentForm.date}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+                <select value={paymentForm.mode}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, mode: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                  {[
+                    { value: "bank", label: "Bank" },
+                    { value: "cash", label: "Cash" },
+                    { value: "upi", label: "UPI" },
+                    { value: "cheque", label: "Cheque" },
+                    { value: "razorpay", label: "Razorpay" },
+                  ].map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reference</label>
+                <input type="text" value={paymentForm.reference}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                  placeholder="Transaction ID or receipt number"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                <textarea value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                  placeholder="Optional payment notes"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500" rows={3} />
+              </div>
+            </div>
+            <div className="flex gap-3 p-5 border-t border-slate-100">
+              <button onClick={closePaymentModal}
+                className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:bg-slate-50">Cancel</button>
+              <button onClick={submitPayment} disabled={paymentSaving || !paymentForm.amount || !paymentForm.date}
+                className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-60">
+                {paymentSaving ? "Saving..." : "Save Payment"}
               </button>
             </div>
           </div>

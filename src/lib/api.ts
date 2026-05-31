@@ -211,7 +211,7 @@ export const api = {
       request<SingleResponse<Invoice>>("/invoices", { method: "POST", body: JSON.stringify(body) }),
     update: (id: string, body: Partial<InvoiceInput>) =>
       request<SingleResponse<Invoice>>(`/invoices/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-    recordPayment: (id: string, body: { amount: number; date: string; mode?: string; reference?: string }) =>
+    recordPayment: (id: string, body: { amount: number; date: string; mode?: string; reference?: string; notes?: string }) =>
       request<SingleResponse<Invoice>>(`/invoices/${id}/payment`, { method: "POST", body: JSON.stringify(body) }),
     summary: () => request<{ success: boolean; data: InvoiceSummary }>("/invoices/summary"),
   },
