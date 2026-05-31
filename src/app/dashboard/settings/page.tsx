@@ -37,6 +37,7 @@ const PLAN_PRICES: Record<string, string> = { basic: "₹999", pro: "₹2,499", 
 function SettingsContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "company");
+  const justActivated = searchParams.get("activated") === "1";
   const [user, setUserState] = useState<User | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -89,8 +90,10 @@ function SettingsContent() {
                 razorpay_signature: r.razorpay_signature,
                 billing: "yearly", plan: subPlan,
               });
-              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
-              setUser(updated); setUserState(updated); setSubSuccess(true);
+              const updated = { ...user, ...res.user };
+              setUser(updated);
+              // Reload so dashboard layout re-reads updated planStatus from localStorage
+              window.location.href = "/dashboard/settings?tab=billing&activated=1";
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -115,8 +118,10 @@ function SettingsContent() {
                 razorpay_signature: r.razorpay_signature || "",
                 billing: "monthly", plan: subPlan,
               });
-              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
-              setUser(updated); setUserState(updated); setSubSuccess(true);
+              const updated = { ...user, ...res.user };
+              setUser(updated);
+              // Reload so dashboard layout re-reads updated planStatus from localStorage
+              window.location.href = "/dashboard/settings?tab=billing&activated=1";
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -340,7 +345,7 @@ function SettingsContent() {
 
                   {subError && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">{subError}</div>}
 
-                  {subSuccess ? (
+                  {(subSuccess || justActivated) ? (
                     <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" /> Subscription activated! Your plan is now active.
                     </div>

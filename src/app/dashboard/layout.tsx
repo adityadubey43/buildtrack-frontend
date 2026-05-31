@@ -12,6 +12,8 @@ import {
   Menu, X, ChevronDown, Camera, Receipt, Wrench, UserCheck,
   TrendingDown, Wallet,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { setUser } from "@/lib/store";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,9 +43,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const u = getUser();
     if (!u) {
       router.replace("/login");
-    } else {
-      setUserState(u);
+      return;
     }
+    setUserState(u);
+
+    // Refresh user from API to get latest planStatus (e.g. after subscription activation)
+    api.auth.me().then((res) => {
+      const fresh = res.user;
+      setUser(fresh);
+      setUserState(fresh);
+    }).catch(() => {
+      // Silently ignore — stale localStorage data is fine as fallback
+    });
   }, [router]);
 
   // Route guard: block screens not permitted for this role (covers direct URL access)
@@ -192,8 +203,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          {/* Trial / expired banner */}
-          {user.planStatus === "trial" && trialDaysLeft <= 7 && (
+          {/* Trial / expired banner — only for trial users, hidden once active */}
+          {user.planStatus === "trial" && trialDaysLeft >= 0 && (
             <div className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
               <span>
                 {trialDaysLeft === 0
