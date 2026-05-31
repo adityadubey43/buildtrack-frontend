@@ -216,7 +216,13 @@ export const api = {
     summary: () => request<{ success: boolean; data: InvoiceSummary }>("/invoices/summary"),
   },
 
-  // Team endpoints removed - use workers/staff endpoints instead
+  // Team ──
+  team: {
+    list: (params?: Record<string, string>) =>
+      request<ListResponse<TeamMember>>(`/workers${toQuery({ ...params, workerType: "employee" })}`),
+    remove: (id: string) => request(`/workers/${id}`, { method: "DELETE" }),
+  },
+
 
   // ── Equipment ──
   equipment: {
@@ -332,6 +338,8 @@ export interface Worker {
 export interface WorkerInput {
   name: string;
   phone?: string;
+  email?: string;
+  password?: string;
   role: string;
   workerType: "labour" | "employee";
   wageType?: string;
@@ -339,6 +347,7 @@ export interface WorkerInput {
   monthlySalary?: number;
   assignedSite?: string;
 }
+
 
 export interface AttendanceRecord {
   _id: string;
@@ -521,7 +530,8 @@ export interface TeamMember {
   email: string;
   role: string;
   phone?: string;
-  assignedSites?: { _id: string; name: string }[];
+  assignedSite?: { _id: string; name: string };
+
   isActive: boolean;
   createdAt: string;
 }
