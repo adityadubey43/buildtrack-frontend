@@ -74,7 +74,7 @@ export default function PlatformDashboard() {
 
   const METRICS = stats ? [
     { label: "Companies", value: String(stats.totalCompanies), sub: `+${stats.newThisMonth} this month`, icon: Building2, color: "text-orange-600", bg: "bg-orange-50" },
-    { label: "MRR (plan-based)", value: formatINR(stats.mrr), sub: `${formatINR(stats.trialPipeline)} in trials`, icon: Wallet, color: "text-green-600", bg: "bg-green-50" },
+    { label: "MRR", value: formatINR(stats.mrr), sub: `${formatINR((stats as any).totalRevenue || 0)} collected`, icon: Wallet, color: "text-green-600", bg: "bg-green-50" },
     { label: "Active Clients", value: String(stats.activeClients), sub: `${stats.byStatus.trial} on trial`, icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-50" },
     { label: "Platform Users", value: String(stats.usage.totalUsers), sub: `${stats.usage.totalProjects} projects`, icon: Users, color: "text-purple-600", bg: "bg-purple-50" },
   ] : [];
@@ -194,7 +194,8 @@ export default function PlatformDashboard() {
                 <th className="py-2.5 px-3 font-medium">Status</th>
                 <th className="py-2.5 px-3 font-medium"><Briefcase className="w-3.5 h-3.5 inline" /> Projects</th>
                 <th className="py-2.5 px-3 font-medium"><Layers className="w-3.5 h-3.5 inline" /> Users</th>
-                <th className="py-2.5 px-3 font-medium">MRR</th>
+                <th className="py-2.5 px-3 font-medium">Amount Paid</th>
+                <th className="py-2.5 px-3 font-medium">Billing</th>
                 <th className="py-2.5 px-3 font-medium">Joined</th>
                 <th className="py-2.5 px-3 font-medium">Manage</th>
               </tr></thead>
@@ -217,7 +218,21 @@ export default function PlatformDashboard() {
                     </td>
                     <td className="py-2.5 px-3 text-slate-600">{c.projects}</td>
                     <td className="py-2.5 px-3 text-slate-600">{c.users}</td>
-                    <td className="py-2.5 px-3 font-semibold text-green-600">{c.mrr ? formatINR(c.mrr) : "—"}</td>
+                    <td className="py-2.5 px-3">
+                      {(c as any).amountPaid ? (
+                        <div>
+                          <span className="font-semibold text-green-600">{formatINR((c as any).amountPaid)}</span>
+                          <span className="text-xs text-slate-400 ml-1">{(c as any).billingCycle === "yearly" ? "/yr" : "/mo"}</span>
+                        </div>
+                      ) : "—"}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {c.planStatus === "active" ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(c as any).billingCycle === "yearly" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                          {(c as any).billingCycle === "yearly" ? "Yearly" : "Monthly"}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="py-2.5 px-3 text-slate-500">{fmtDate(c.createdAt)}</td>
                     <td className="py-2.5 px-3">
                       <div className="flex items-center gap-1.5">

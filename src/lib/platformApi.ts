@@ -59,10 +59,14 @@ export interface Company {
   planStatus: string;
   isActive: boolean;
   trialEndsAt?: string;
+  subscriptionStartedAt?: string;
+  subscriptionEndsAt?: string;
+  billingCycle?: "monthly" | "yearly";
   createdAt: string;
   users: number;
   projects: number;
-  mrr: number;
+  amountPaid: number;   // actual amount paid (yearly full price or monthly price)
+  mrr: number;          // monthly equivalent
 }
 
 export interface PlatformStats {
