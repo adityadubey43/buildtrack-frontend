@@ -285,6 +285,8 @@ export interface AuthUser {
   plan: string;
   planStatus: string;
   trialEndsAt: string;
+  subscriptionStartedAt?: string;
+  subscriptionEndsAt?: string;
 }
 
 export interface AuthResponse {

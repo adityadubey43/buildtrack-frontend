@@ -37,6 +37,7 @@ const PLAN_PRICES: Record<string, string> = { basic: "₹999", pro: "₹2,499", 
 function SettingsContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "company");
+  const justActivated = searchParams.get("activated") === "1";
   const [user, setUserState] = useState<User | null>(null);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -89,8 +90,10 @@ function SettingsContent() {
                 razorpay_signature: r.razorpay_signature,
                 billing: "yearly", plan: subPlan,
               });
-              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
-              setUser(updated); setUserState(updated); setSubSuccess(true);
+              const updated = { ...user, ...res.user };
+              setUser(updated);
+              // Reload so dashboard layout re-reads updated planStatus from localStorage
+              window.location.href = "/dashboard/settings?tab=billing&activated=1";
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -115,8 +118,10 @@ function SettingsContent() {
                 razorpay_signature: r.razorpay_signature || "",
                 billing: "monthly", plan: subPlan,
               });
-              const updated = { ...user, planStatus: res.user.planStatus, plan: subPlan };
-              setUser(updated); setUserState(updated); setSubSuccess(true);
+              const updated = { ...user, ...res.user };
+              setUser(updated);
+              // Reload so dashboard layout re-reads updated planStatus from localStorage
+              window.location.href = "/dashboard/settings?tab=billing&activated=1";
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -249,7 +254,12 @@ function SettingsContent() {
                           {status === "active" ? "Active Subscription" : status === "trial" ? "Free Trial" : status === "expired" ? "Trial Expired" : "Subscription"}
                         </div>
                         <div className="font-black text-2xl text-slate-900">{planName}</div>
-                        <div className="text-slate-500 text-sm">{PLAN_PRICES[plan]}/month</div>
+                        <div className="text-slate-500 text-sm">
+                          {PLAN_PRICES[plan]}/month
+                          {status === "active" && user?.subscriptionEndsAt
+                            ? " · Yearly"
+                            : status === "active" ? " · Monthly auto-renewal" : ""}
+                        </div>
                       </div>
                       <div className="text-right">
                         {status === "active" ? (
@@ -269,6 +279,47 @@ function SettingsContent() {
                         )}
                       </div>
                     </div>
+
+                    {/* Subscription dates */}
+                    {status === "active" && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
+                        {user?.subscriptionStartedAt && (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Started</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {new Date(user.subscriptionStartedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                        )}
+                        {user?.subscriptionEndsAt ? (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Renews On</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {new Date(user.subscriptionEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {Math.max(0, Math.ceil((new Date(user.subscriptionEndsAt).getTime() - Date.now()) / 86400000))} days remaining
+                            </p>
+                          </div>
+                        ) : status === "active" ? (
+                          <div>
+                            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Billing</p>
+                            <p className="text-sm font-semibold text-slate-800">Monthly</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Auto-renews via Razorpay</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Trial dates */}
+                    {status === "trial" && user?.trialEndsAt && (
+                      <div className="mt-4 pt-4 border-t border-slate-100">
+                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Trial Ends</p>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {new Date(user.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -340,7 +391,7 @@ function SettingsContent() {
 
                   {subError && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm mb-4">{subError}</div>}
 
-                  {subSuccess ? (
+                  {(subSuccess || justActivated) ? (
                     <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-700 text-sm flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" /> Subscription activated! Your plan is now active.
                     </div>
