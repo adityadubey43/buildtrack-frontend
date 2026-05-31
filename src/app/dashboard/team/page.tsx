@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Search, Shield, Loader2, Users, RefreshCw, Trash2 } from "lucide-react";
-import { api, type TeamMember } from "@/lib/api";
+import { api, type Worker } from "@/lib/api";
 import { AddTeamMemberModal } from "@/components/addTeamMemberModal";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -14,7 +14,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function TeamPage() {
-  const [team, setTeam]         = useState<TeamMember[]>([]);
+  const [team, setTeam]         = useState<Worker[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]     = useState("");
@@ -22,7 +22,7 @@ export default function TeamPage() {
 
   const loadTeam = useCallback(async () => {
     try {
-      const r = await api.team.list();
+      const r = await api.workers.list({ workerType: "employee" });
       console.log("📋 Team list loaded:", r.data.length, "members");
       setTeam(r.data);
     } catch (e) {
@@ -44,14 +44,14 @@ export default function TeamPage() {
 
   const filtered = team.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.email.toLowerCase().includes(search.toLowerCase()) ||
-    m.role.toLowerCase().includes(search.toLowerCase())
+    (m.email || "").toLowerCase().includes(search.toLowerCase()) ||
+    (m.role || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const handleRemove = async (id: string, name: string) => {
     if (!confirm(`Delete ${name}? They will no longer have access.`)) return;
     try {
-      await api.team.remove(id);
+      await api.workers.delete(id);
       setTeam(prev => prev.filter(m => m._id !== id));
     } catch (err) { console.error(err); }
   };
@@ -134,10 +134,11 @@ export default function TeamPage() {
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${ROLE_COLORS[m.role] || "bg-slate-100 text-slate-600"}`}>{m.role}</span>
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-600">
-                    {m.assignedSites?.length ? m.assignedSites.map(s => s.name).join(", ") : "All Sites"}
+                    {m.assignedSite?.name || "All Sites"}
                   </td>
+
                   <td className="px-4 py-3 text-sm text-slate-500">
-                    {new Date(m.createdAt).toLocaleDateString("en-IN")}
+                    {m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-IN") : "-"}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${m.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
