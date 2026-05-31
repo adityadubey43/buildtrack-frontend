@@ -28,6 +28,7 @@ export const ROLE_ROUTES: Record<string, string[]> = {
     "/dashboard/projects",
     "/dashboard/attendance",
     "/dashboard/reports",
+    "/dashboard/staff-details",
     "/dashboard/settings",
   ],
   accountant: [
@@ -37,6 +38,7 @@ export const ROLE_ROUTES: Record<string, string[]> = {
     "/dashboard/expenses",
     "/dashboard/payments",
     "/dashboard/analytics",
+    "/dashboard/staff-details",
     "/dashboard/settings",
   ],
 };

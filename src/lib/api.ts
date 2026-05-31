@@ -216,16 +216,7 @@ export const api = {
     summary: () => request<{ success: boolean; data: InvoiceSummary }>("/invoices/summary"),
   },
 
-  // ── Team ──
-  team: {
-    list: (params?: Record<string, string>) =>
-      request<ListResponse<TeamMember>>(`/team${toQuery(params)}`),
-    invite: (body: { name: string; email: string; role: string; phone?: string; assignedSites?: string[] }) =>
-      request<SingleResponse<TeamMember>>("/team", { method: "POST", body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<TeamMember>) =>
-      request<SingleResponse<TeamMember>>(`/team/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-    remove: (id: string) => request(`/team/${id}`, { method: "DELETE" }),
-  },
+  // Team endpoints removed - use workers/staff endpoints instead
 
   // ── Equipment ──
   equipment: {
@@ -327,6 +318,7 @@ export interface Worker {
   _id: string;
   name: string;
   phone?: string;
+  email?: string;
   role: string;
   workerType: "labour" | "employee";
   wageType: string;
@@ -334,6 +326,7 @@ export interface Worker {
   monthlySalary?: number;
   assignedSite?: { _id: string; name: string };
   isActive: boolean;
+  createdAt?: string;
 }
 
 export interface WorkerInput {

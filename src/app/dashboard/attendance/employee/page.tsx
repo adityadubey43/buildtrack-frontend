@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type AttendanceRecord, type Worker, type Project, type MonthlySummaryRow } from "@/lib/api";
 import { uploadFiles } from "@/lib/uploadApi";
-import { AddWorkerModal } from "@/components/workerModal";
+import { AddStaffMemberModal } from "@/components/addStaffMemberModal";
 import { MyAttendanceCard } from "@/components/selfAttendance";
 import { ViewPhotosButton } from "@/components/imageViewer";
 import { getUser } from "@/lib/store";
 import { canSeeFinance } from "@/lib/permissions";
 import {
-  Plus, Download, X, Calendar, UserPlus, UserCheck, Camera, Loader2,
+  Plus, Download, X, Calendar, UserPlus, UserCheck, Camera, Loader2, Trash2,
   LogIn, LogOut, Clock,
 } from "lucide-react";
 
@@ -267,6 +267,14 @@ export default function EmployeeAttendancePage() {
     await loadToday();
   };
 
+  const handleDeleteStaff = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}? This will remove them from team members.`)) return;
+    try {
+      await api.workers.delete(id);
+      setWorkers(prev => prev.filter(w => w._id !== id));
+    } catch (e: unknown) { console.error(e); }
+  };
+
   const exportCSV = () => {
     const head = ["Employee", "Role", "Present", "Leave", "Absent", "Total Hours"];
     if (showFinance) head.push("Monthly Salary");
@@ -296,7 +304,7 @@ export default function EmployeeAttendancePage() {
         />
       )}
       {showMark && <MarkModal workers={workers} projects={projects} onClose={() => setShowMark(false)} onSaved={() => { loadToday(); }} />}
-      {showAdd && <AddWorkerModal workerType="employee" projects={projects} onClose={() => setShowAdd(false)} onSaved={loadRef} />}
+      {showAdd && <AddStaffMemberModal projects={projects} onClose={() => setShowAdd(false)} onSaved={loadRef} />}
 
       <div className="p-4 lg:p-6 space-y-6">
         {/* Header */}
@@ -417,6 +425,9 @@ export default function EmployeeAttendancePage() {
                             {checkedIn ? "Checked in" : "Not in"}
                           </span>
                         )}
+                        <button onClick={() => handleDeleteStaff(w._id, w.name)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium border border-red-200">
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
                       </div>
                     </div>
                   );
@@ -435,6 +446,7 @@ export default function EmployeeAttendancePage() {
                     <th className="py-2.5 px-3 font-medium">Present</th><th className="py-2.5 px-3 font-medium">Leave</th>
                     <th className="py-2.5 px-3 font-medium">Absent</th><th className="py-2.5 px-3 font-medium">Total Hours</th>
                     {showFinance && <th className="py-2.5 px-3 font-medium">Monthly Salary</th>}
+                    <th className="py-2.5 px-3 font-medium text-right"></th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-50">
                     {summary.map((s) => (
@@ -446,6 +458,11 @@ export default function EmployeeAttendancePage() {
                         <td className="py-2.5 px-3"><span className="text-red-600">{s.absent}</span></td>
                         <td className="py-2.5 px-3 font-semibold text-slate-800">{s.totalHours}h</td>
                         {showFinance && <td className="py-2.5 px-3 text-slate-700">₹{(s.monthlySalary || 0).toLocaleString("en-IN")}</td>}
+                        <td className="py-2.5 px-3 text-right">
+                          <button onClick={() => handleDeleteStaff(s.workerId, s.name)} className="flex items-center gap-1 text-red-600 hover:text-red-700 text-xs font-medium ml-auto">
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

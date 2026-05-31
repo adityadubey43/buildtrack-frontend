@@ -117,10 +117,14 @@ export default function SignupPage() {
           description: `${planName} — Monthly · ${fmt(MONTHLY[selectedPlan])}/mo`,
           prefill: { name: form.adminName, email: form.email, contact: form.phone },
           theme: { color: "#f97316" },
+          method: { emandate: 1 }, // Enable card mandate for recurring payments
           modal: { ondismiss: () => { setLoading(null); setApiError("Payment cancelled."); } },
           handler: async (r: { razorpay_payment_id?: string; razorpay_subscription_id: string; razorpay_signature?: string }) => {
             console.log("[Razorpay subscription handler]", r);
             try {
+              if (!r.razorpay_subscription_id) {
+                throw new Error("Subscription ID not received from payment gateway.");
+              }
               const res = await api.razorpay.verifyAndSignup({
                 razorpay_payment_id: r.razorpay_payment_id || "",
                 razorpay_subscription_id: r.razorpay_subscription_id,
