@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Search, Shield, Loader2, Users, RefreshCw, Trash2 } from "lucide-react";
-import { api, type Worker } from "@/lib/api";
+import { api, type Worker, type Project } from "@/lib/api";
 import { AddTeamMemberModal } from "@/components/addTeamMemberModal";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -15,6 +15,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function TeamPage() {
   const [team, setTeam]         = useState<Worker[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]     = useState("");
@@ -30,9 +31,19 @@ export default function TeamPage() {
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await api.projects.list();
+      setProjects(res.data);
+    } catch (e) {
+      console.error("❌ Error loading projects:", e);
+    }
+  }, []);
+
   useEffect(() => {
-    loadTeam().finally(() => setLoading(false));
-  }, [loadTeam]);
+    Promise.all([loadTeam(), loadProjects()])
+      .finally(() => setLoading(false));
+  }, [loadTeam, loadProjects]);
 
   // Refresh team list every 5 seconds to catch staff added from other pages
   useEffect(() => {
@@ -161,6 +172,7 @@ export default function TeamPage() {
 
       {showModal && (
         <AddTeamMemberModal
+          projects={projects}
           onClose={() => setShowModal(false)}
           onSaved={() => loadTeam()}
         />

@@ -38,16 +38,21 @@ export default function BillingPage() {
     setSaving(true);
     try {
       const amount = parseFloat(form.amount);
-      const gst = amount * 0.18;
+      const dueDate = form.dueDate || new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0];
       const inv = await api.invoices.create({
-        project: form.project as unknown as { _id: string; name: string },
+        project: form.project,
         clientName: form.clientName,
         milestone: form.milestone,
-        subtotal: amount,
-        gstAmount: gst,
-        totalAmount: amount + gst,
-        dueDate: form.dueDate || new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0],
+        items: [
+          {
+            description: form.milestone || "Invoice item",
+            quantity: 1,
+            rate: amount,
+            amount,
+          },
+        ],
         invoiceDate: new Date().toISOString().split("T")[0],
+        dueDate,
         status: "draft",
       });
       setInvoices((prev) => [inv.data, ...prev]);
