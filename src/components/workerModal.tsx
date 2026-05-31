@@ -22,6 +22,8 @@ export function AddWorkerModal({
   const [form, setForm] = useState({
     name: "",
     phone: "",
+    email: "",
+    password: "",
     role: isLabour ? "labour" : "engineer",
     dailyWage: "",
     monthlySalary: "",
@@ -29,17 +31,24 @@ export function AddWorkerModal({
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name) { setErr("Name is required."); return; }
+    if (!isLabour && !form.email) { setErr("Email is required for staff members."); return; }
+    if (!isLabour && !form.password) { setErr("Password is required for staff members."); return; }
+    if (!isLabour && form.password.length < 8) { setErr("Password must be at least 8 characters."); return; }
     setSaving(true);
     setErr("");
+    setSuccessMsg("");
     try {
-      await api.workers.create({
+      const res = await api.workers.create({
         name: form.name,
         phone: form.phone,
+        email: !isLabour ? form.email : undefined,
+        password: !isLabour ? form.password : undefined,
         role: form.role,
         workerType,
         wageType: isLabour ? "daily" : "monthly",
@@ -47,8 +56,19 @@ export function AddWorkerModal({
         monthlySalary: !isLabour ? Number(form.monthlySalary) || 0 : 0,
         assignedSite: form.assignedSite || undefined,
       });
-      onSaved();
-      onClose();
+      
+      // Show success message
+      if (!isLabour) {
+        setSuccessMsg(`✓ ${form.name} added as staff member and is now a team member. They can log in with their email & password.`);
+      } else {
+        setSuccessMsg(`✓ ${form.name} added as site worker.`);
+      }
+      
+      setTimeout(() => {
+        setForm({ name: "", phone: "", email: "", password: "", role: isLabour ? "labour" : "engineer", dailyWage: "", monthlySalary: "", assignedSite: "" });
+        onSaved();
+        onClose();
+      }, 1500);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save.");
     } finally {
@@ -68,6 +88,7 @@ export function AddWorkerModal({
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {err && <p className="text-red-600 text-sm bg-red-50 rounded-lg p-3">{err}</p>}
+          {successMsg && <p className="text-green-600 text-sm bg-green-50 rounded-lg p-3">{successMsg}</p>}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
             <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ring}`} required />
@@ -84,6 +105,19 @@ export function AddWorkerModal({
               </select>
             </div>
           </div>
+          {!isLabour && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email (Login) *</label>
+                <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="staff@company.com" className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ring}`} required={!isLabour} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password (Login) *</label>
+                <input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Min 8 characters" className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${ring}`} required={!isLabour} />
+                <p className="text-xs text-slate-400 mt-1">Staff member can use this email & password to login</p>
+              </div>
+            </>
+          )}
           {isLabour ? (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Daily Wage (₹)</label>

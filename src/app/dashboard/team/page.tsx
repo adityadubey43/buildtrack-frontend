@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { UserPlus, Search, Shield, Loader2, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { UserPlus, Search, Shield, Loader2, Users, RefreshCw, Trash2 } from "lucide-react";
 import { api, type TeamMember } from "@/lib/api";
+import { AddTeamMemberModal } from "@/components/addTeamMemberModal";
 
 const ROLE_COLORS: Record<string, string> = {
   admin:      "bg-purple-100 text-purple-700",
@@ -15,17 +16,31 @@ const ROLE_COLORS: Record<string, string> = {
 export default function TeamPage() {
   const [team, setTeam]         = useState<TeamMember[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch]     = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", role: "supervisor", phone: "" });
+
+  const loadTeam = useCallback(async () => {
+    try {
+      const r = await api.team.list();
+      console.log("📋 Team list loaded:", r.data.length, "members");
+      setTeam(r.data);
+    } catch (e) {
+      console.error("❌ Error loading team:", e);
+    }
+  }, []);
 
   useEffect(() => {
-    api.team.list()
-      .then(r => setTeam(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    loadTeam().finally(() => setLoading(false));
+  }, [loadTeam]);
+
+  // Refresh team list every 5 seconds to catch staff added from other pages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadTeam();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [loadTeam]);
 
   const filtered = team.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -33,20 +48,8 @@ export default function TeamPage() {
     m.role.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleInvite = async () => {
-    if (!form.name || !form.email) return;
-    setSaving(true);
-    try {
-      const res = await api.team.invite({ name: form.name, email: form.email, role: form.role, phone: form.phone });
-      setTeam(prev => [res.data, ...prev]);
-      setShowModal(false);
-      setForm({ name: "", email: "", role: "supervisor", phone: "" });
-    } catch (err) { console.error(err); }
-    finally { setSaving(false); }
-  };
-
-  const handleRemove = async (id: string) => {
-    if (!confirm("Remove this team member?")) return;
+  const handleRemove = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}? They will no longer have access.`)) return;
     try {
       await api.team.remove(id);
       setTeam(prev => prev.filter(m => m._id !== id));
@@ -66,10 +69,17 @@ export default function TeamPage() {
           <h1 className="text-2xl font-bold text-slate-900">Team Members</h1>
           <p className="text-slate-500 text-sm">{team.length} member{team.length !== 1 ? "s" : ""} in your company</p>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold">
-          <UserPlus className="w-4 h-4" /> Add Member
-        </button>
+        <div className="flex gap-2">
+          <button onClick={async () => { setRefreshing(true); await loadTeam(); setRefreshing(false); }}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold">
+            <UserPlus className="w-4 h-4" /> Add Member
+          </button>
+        </div>
       </div>
 
       {/* Role breakdown */}
@@ -136,7 +146,9 @@ export default function TeamPage() {
                   </td>
                   <td className="px-4 py-3">
                     {m.role !== "admin" && (
-                      <button onClick={() => handleRemove(m._id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                      <button onClick={() => handleRemove(m._id, m.name)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium">
+                        <Trash2 className="w-3 h-3" /> Delete
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -147,45 +159,10 @@ export default function TeamPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h2 className="font-bold text-slate-900">Add Team Member</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
-            </div>
-            <div className="p-5 space-y-4">
-              {[
-                { key: "name",  label: "Full Name",    placeholder: "e.g. Rajesh Patel", type: "text" },
-                { key: "email", label: "Email Address", placeholder: "e.g. rajesh@company.com", type: "email" },
-                { key: "phone", label: "Phone Number",  placeholder: "+91 98765 43210", type: "tel" },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
-                  <input type={f.type} placeholder={f.placeholder} value={form[f.key as keyof typeof form]}
-                    onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                </div>
-              ))}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
-                  <option value="supervisor">Supervisor</option>
-                  <option value="engineer">Engineer</option>
-                  <option value="accountant">Accountant</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 p-5 border-t border-slate-100">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-sm font-medium">Cancel</button>
-              <button onClick={handleInvite} disabled={saving || !form.name || !form.email}
-                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold disabled:opacity-60">
-                {saving ? "Adding..." : "Add Member"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AddTeamMemberModal
+          onClose={() => setShowModal(false)}
+          onSaved={() => loadTeam()}
+        />
       )}
     </div>
   );
