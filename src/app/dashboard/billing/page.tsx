@@ -14,6 +14,10 @@ const STATUS: Record<string, { label: string; color: string; icon: React.Compone
 
 function fmt(n: number) { return `₹${n.toLocaleString("en-IN")}`; }
 
+const sortInvoices = (invoices: Invoice[]) => [...invoices].sort(
+  (a, b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime()
+);
+
 export default function BillingPage() {
   const [invoices, setInvoices]   = useState<Invoice[]>([]);
   const [projects, setProjects]   = useState<Project[]>([]);
@@ -27,7 +31,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     Promise.all([api.invoices.list(), api.projects.list()])
-      .then(([inv, proj]) => { setInvoices(inv.data); setProjects(proj.data); })
+      .then(([inv, proj]) => { setInvoices(sortInvoices(inv.data)); setProjects(proj.data); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -58,7 +62,7 @@ export default function BillingPage() {
         dueDate,
         status: "draft",
       });
-      setInvoices((prev) => [inv.data, ...prev]);
+      setInvoices((prev) => sortInvoices([inv.data, ...prev]));
       setShowModal(false);
       setForm({ project: "", clientName: "", milestone: "", amount: "", dueDate: "" });
     } catch (err) { console.error(err); }
@@ -152,7 +156,7 @@ export default function BillingPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">

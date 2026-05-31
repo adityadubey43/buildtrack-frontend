@@ -25,7 +25,12 @@ export default function TeamPage() {
     try {
       const r = await api.workers.list({ workerType: "employee" });
       console.log("📋 Team list loaded:", r.data.length, "members");
-      setTeam(r.data);
+      const sortedTeam = [...r.data].sort((a, b) => {
+        const aTime = new Date(a.createdAt || 0).getTime() || 0;
+        const bTime = new Date(b.createdAt || 0).getTime() || 0;
+        return bTime - aTime;
+      });
+      setTeam(sortedTeam);
     } catch (e) {
       console.error("❌ Error loading team:", e);
     }
@@ -121,7 +126,8 @@ export default function TeamPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <table className="w-full">
+          <div className="overflow-x-auto overflow-y-auto max-h-[420px]">
+            <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {["Name", "Email", "Role", "Sites", "Joined", "Status", ""].map(h => (
@@ -167,6 +173,7 @@ export default function TeamPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
