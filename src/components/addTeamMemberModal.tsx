@@ -130,6 +130,17 @@ export function AddTeamMemberModal({
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assign Project</label>
+            <select value={form.assignedSite} onChange={e => set("assignedSite", e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Sites / Unassigned</option>
+              {projects?.map((project) => (
+                <option key={project._id} value={project._id}>{project.name}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-sm font-medium hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={saving || !form.name || !form.email || !form.password}
