@@ -188,64 +188,142 @@ export default function PlatformDashboard() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50">
-                <th className="py-2.5 px-4 font-medium">Company</th>
-                <th className="py-2.5 px-3 font-medium">Plan</th>
-                <th className="py-2.5 px-3 font-medium">Status</th>
-                <th className="py-2.5 px-3 font-medium"><Briefcase className="w-3.5 h-3.5 inline" /> Projects</th>
-                <th className="py-2.5 px-3 font-medium"><Layers className="w-3.5 h-3.5 inline" /> Users</th>
-                <th className="py-2.5 px-3 font-medium">Amount Paid</th>
-                <th className="py-2.5 px-3 font-medium">Billing</th>
-                <th className="py-2.5 px-3 font-medium">Joined</th>
-                <th className="py-2.5 px-3 font-medium">Manage</th>
-              </tr></thead>
-              <tbody className="divide-y divide-slate-50">
-                {companies.map((c) => (
-                  <tr key={c.tenantId} className={`hover:bg-slate-50 ${!c.isActive ? "opacity-50" : ""}`}>
-                    <td className="py-2.5 px-4">
-                      <div className="font-medium text-slate-800">{c.companyName}</div>
-                      <div className="text-xs text-slate-400">/c/{c.slug || "—"}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <select value={c.plan} onChange={(e) => act(c.tenantId, { plan: e.target.value })} className={`text-xs px-2 py-1 rounded-full font-medium capitalize border-0 cursor-pointer ${PLAN_CLS[c.plan]}`}>
-                        <option value="basic">basic</option><option value="pro">pro</option><option value="enterprise">enterprise</option>
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <select value={c.planStatus} onChange={(e) => act(c.tenantId, { planStatus: e.target.value })} className={`text-xs px-2 py-1 rounded-full font-medium capitalize border-0 cursor-pointer ${STATUS_CLS[c.planStatus]}`}>
-                        <option value="trial">trial</option><option value="active">active</option><option value="expired">expired</option><option value="cancelled">cancelled</option>
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-600">{c.projects}</td>
-                    <td className="py-2.5 px-3 text-slate-600">{c.users}</td>
-                    <td className="py-2.5 px-3">
-                      {(c as any).amountPaid ? (
-                        <div>
-                          <span className="font-semibold text-green-600">{formatINR((c as any).amountPaid)}</span>
-                          <span className="text-xs text-slate-400 ml-1">{(c as any).billingCycle === "yearly" ? "/yr" : "/mo"}</span>
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-100 bg-slate-50">
+                  <th className="py-3 px-4 font-medium">Company</th>
+                  <th className="py-3 px-3 font-medium">Plan / Status</th>
+                  <th className="py-3 px-3 font-medium">Amount Paid</th>
+                  <th className="py-3 px-3 font-medium">Subscribed On</th>
+                  <th className="py-3 px-3 font-medium">Active Until</th>
+                  <th className="py-3 px-3 font-medium">Usage</th>
+                  <th className="py-3 px-3 font-medium">Manage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {companies.map((c) => {
+                  const isYearly   = c.billingCycle === "yearly";
+                  const startedAt  = c.subscriptionStartedAt;
+                  const endsAt     = c.subscriptionEndsAt || c.trialEndsAt;
+                  const daysLeft   = endsAt ? Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86400000)) : null;
+                  const isExpiring = daysLeft !== null && daysLeft <= 7 && c.planStatus === "active";
+
+                  return (
+                    <tr key={c.tenantId} className={`hover:bg-slate-50 ${!c.isActive ? "opacity-40" : ""}`}>
+
+                      {/* Company */}
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-800">{c.companyName}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">/c/{c.slug || "—"}</div>
+                      </td>
+
+                      {/* Plan + Status */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <select value={c.plan} onChange={(e) => act(c.tenantId, { plan: e.target.value })}
+                            className={`text-xs px-2 py-1 rounded-full font-medium capitalize border-0 cursor-pointer ${PLAN_CLS[c.plan]}`}>
+                            <option value="basic">basic</option>
+                            <option value="pro">pro</option>
+                            <option value="enterprise">enterprise</option>
+                          </select>
                         </div>
-                      ) : "—"}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      {c.planStatus === "active" ? (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(c as any).billingCycle === "yearly" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                          {(c as any).billingCycle === "yearly" ? "Yearly" : "Monthly"}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-500">{fmtDate(c.createdAt)}</td>
-                    <td className="py-2.5 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => act(c.tenantId, { extendTrialDays: 7 })} title="Extend trial +7 days" className="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600">+7d</button>
-                        <button onClick={() => act(c.tenantId, { isActive: !c.isActive })} className={`text-xs px-2 py-1 rounded-lg font-medium ${c.isActive ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-700 hover:bg-green-100"}`}>
-                          {c.isActive ? "Suspend" : "Activate"}
-                        </button>
-                      </div>
+                        <select value={c.planStatus} onChange={(e) => act(c.tenantId, { planStatus: e.target.value })}
+                          className={`text-xs px-2 py-1 rounded-full font-medium capitalize border-0 cursor-pointer ${STATUS_CLS[c.planStatus]}`}>
+                          <option value="trial">trial</option>
+                          <option value="active">active</option>
+                          <option value="expired">expired</option>
+                          <option value="cancelled">cancelled</option>
+                        </select>
+                      </td>
+
+                      {/* Amount Paid */}
+                      <td className="py-3 px-3">
+                        {c.amountPaid ? (
+                          <div>
+                            <div className="font-bold text-green-600 text-base">{formatINR(c.amountPaid)}</div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isYearly ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                {isYearly ? "Yearly" : "Monthly"}
+                              </span>
+                              {isYearly && (
+                                <span className="text-xs text-slate-400">({formatINR(Math.round(c.amountPaid / 12))}/mo equiv.)</span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">{c.planStatus === "trial" ? "Trial (no charge)" : "—"}</span>
+                        )}
+                      </td>
+
+                      {/* Subscribed On */}
+                      <td className="py-3 px-3">
+                        {startedAt ? (
+                          <div>
+                            <div className="text-slate-800 font-medium">{fmtDate(startedAt)}</div>
+                            <div className="text-xs text-slate-400">activation date</div>
+                          </div>
+                        ) : c.planStatus === "trial" ? (
+                          <div>
+                            <div className="text-slate-800 font-medium">{fmtDate(c.createdAt)}</div>
+                            <div className="text-xs text-slate-400">trial started</div>
+                          </div>
+                        ) : <span className="text-slate-400">—</span>}
+                      </td>
+
+                      {/* Active Until */}
+                      <td className="py-3 px-3">
+                        {c.planStatus === "active" && !isYearly ? (
+                          <div>
+                            <div className="text-blue-600 font-medium text-xs">Auto-renews monthly</div>
+                            <div className="text-xs text-slate-400">via Razorpay</div>
+                          </div>
+                        ) : endsAt ? (
+                          <div>
+                            <div className={`font-semibold ${isExpiring ? "text-red-600" : "text-slate-800"}`}>
+                              {fmtDate(endsAt)}
+                            </div>
+                            <div className={`text-xs mt-0.5 ${isExpiring ? "text-red-500 font-medium" : "text-slate-400"}`}>
+                              {daysLeft === 0 ? "⚠️ Expires today" :
+                               daysLeft === 1 ? "⚠️ 1 day left" :
+                               isExpiring ? `⚠️ ${daysLeft} days left` :
+                               `${daysLeft} days remaining`}
+                            </div>
+                          </div>
+                        ) : <span className="text-slate-400 text-xs">—</span>}
+                      </td>
+
+                      {/* Usage */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-3 text-xs text-slate-600">
+                          <div className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{c.projects}</div>
+                          <div className="flex items-center gap-1"><Layers className="w-3 h-3" />{c.users}</div>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-3">
+                        <div className="flex flex-col gap-1">
+                          {c.planStatus === "trial" && (
+                            <button onClick={() => act(c.tenantId, { extendTrialDays: 7 })}
+                              className="text-xs px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 font-medium">
+                              +7 days
+                            </button>
+                          )}
+                          <button onClick={() => act(c.tenantId, { isActive: !c.isActive })}
+                            className={`text-xs px-2.5 py-1 rounded-lg font-medium ${c.isActive ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-700 hover:bg-green-100"}`}>
+                            {c.isActive ? "Suspend" : "Activate"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {companies.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">No companies found.</p>
                     </td>
                   </tr>
-                ))}
-                {companies.length === 0 && (
-                  <tr><td colSpan={8} className="py-10 text-center text-slate-400"><AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">No companies found.</p></td></tr>
                 )}
               </tbody>
             </table>
@@ -253,7 +331,7 @@ export default function PlatformDashboard() {
         </div>
 
         <p className="text-xs text-slate-400 text-center">
-          MRR is plan-based (Basic {formatINR(stats?.planPrices.basic || 0)}, Pro {formatINR(stats?.planPrices.pro || 0)}) and counts active subscriptions only. Real collected revenue will appear once Razorpay is integrated.
+          MRR = monthly equivalent of all active subscriptions. Yearly subscribers show (annual ÷ 12). "Total Collected" = actual amounts charged.
         </p>
       </main>
     </div>
