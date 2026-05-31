@@ -1,149 +1,144 @@
 "use client";
 
-import { useState } from "react";
-import { Calculator, Download, CheckCircle, Clock, AlertCircle, Users, DollarSign, TrendingUp } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calculator, CheckCircle, Clock, Users, DollarSign, Loader2 } from "lucide-react";
+import { api, type Payroll } from "@/lib/api";
 
-const PAYROLL_DATA = [
-  { id: 1, name: "Ramesh Kumar", role: "Mason", site: "Skyline Heights", days: 26, wage: 700, overtime: 3, total: 18700, status: "paid", paidOn: "27 May 2026" },
-  { id: 2, name: "Suresh Patel", role: "Labour", site: "Green Valley", days: 24, wage: 500, overtime: 0, total: 12000, status: "pending", paidOn: "-" },
-  { id: 3, name: "Mohd. Iqbal", role: "Supervisor", site: "Metro Plaza", days: 25, wage: 1200, overtime: 5, total: 31500, status: "paid", paidOn: "27 May 2026" },
-  { id: 4, name: "Vijay Sharma", role: "Labour", site: "River View", days: 22, wage: 500, overtime: 2, total: 11300, status: "pending", paidOn: "-" },
-  { id: 5, name: "Deepak Yadav", role: "Contractor", site: "Skyline Heights", days: 0, wage: 0, overtime: 0, total: 85000, status: "paid", paidOn: "20 May 2026" },
-  { id: 6, name: "Anita Bai", role: "Labour", site: "Green Valley", days: 23, wage: 450, overtime: 0, total: 10350, status: "pending", paidOn: "-" },
-];
+function fmt(n: number) { return `₹${n.toLocaleString("en-IN")}`; }
 
 export default function PayrollPage() {
-  const [week, setWeek] = useState("Week 21 (20-26 May 2026)");
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [paying, setPaying]     = useState<string | null>(null);
 
-  const totalPaid = PAYROLL_DATA.filter((r) => r.status === "paid").reduce((s, r) => s + r.total, 0);
-  const totalPending = PAYROLL_DATA.filter((r) => r.status === "pending").reduce((s, r) => s + r.total, 0);
+  useEffect(() => {
+    api.payroll.list()
+      .then(r => setPayrolls(r.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalPaid    = payrolls.reduce((s, p) => s + p.paidAmount, 0);
+  const totalPending = payrolls.reduce((s, p) => s + p.pendingAmount, 0);
+
+  const handlePay = async (id: string) => {
+    setPaying(id);
+    try {
+      const res = await api.payroll.pay(id, { payAll: true, paymentMode: "cash" });
+      setPayrolls(prev => prev.map(p => p._id === id ? res.data : p));
+    } catch (err) { console.error(err); }
+    finally { setPaying(null); }
+  };
+
+  if (loading) return (
+    <div className="p-6 flex items-center justify-center min-h-64">
+      <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+    </div>
+  );
 
   return (
     <div className="p-4 lg:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Payroll</h1>
-          <p className="text-slate-500 text-sm">Auto-calculated from attendance data</p>
-        </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50">
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold">
-            <Calculator className="w-4 h-4" />
-            Run Payroll
-          </button>
+          <p className="text-slate-500 text-sm">Manage worker payments</p>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Total Workers", value: PAYROLL_DATA.length, icon: Users, bg: "bg-blue-50", color: "text-blue-600" },
-          { label: "Total Payable", value: `₹${((totalPaid + totalPending) / 100000).toFixed(1)}L`, icon: DollarSign, bg: "bg-orange-50", color: "text-orange-600" },
-          { label: "Amount Paid", value: `₹${(totalPaid / 100000).toFixed(1)}L`, icon: CheckCircle, bg: "bg-green-50", color: "text-green-600" },
-          { label: "Pending", value: `₹${(totalPending / 100000).toFixed(1)}L`, icon: Clock, bg: "bg-red-50", color: "text-red-600" },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center mb-3`}>
-              <s.icon className={`w-5 h-5 ${s.color}`} />
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2"><Users className="w-4 h-4 text-slate-400" /></div>
+          <div className="text-xl font-black text-slate-900">{payrolls.length}</div>
+          <div className="text-xs text-slate-500">Payroll Cycles</div>
+        </div>
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-4 h-4 text-green-500" /></div>
+          <div className="text-xl font-black text-green-700">{fmt(totalPaid)}</div>
+          <div className="text-xs text-green-600">Total Paid</div>
+        </div>
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2"><Clock className="w-4 h-4 text-orange-500" /></div>
+          <div className="text-xl font-black text-orange-700">{fmt(totalPending)}</div>
+          <div className="text-xs text-orange-600">Pending</div>
+        </div>
+      </div>
+
+      {payrolls.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+          <Calculator className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500 font-medium">No payroll records yet</p>
+          <p className="text-slate-400 text-sm mt-1">Payroll is calculated from attendance records. Mark attendance first.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {payrolls.map(p => (
+            <div key={p._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="font-bold text-slate-900 capitalize">{p.workerType} Payroll — {p.weekLabel || p.cycle}</p>
+                  <p className="text-sm text-slate-500">{p.project?.name || "All Sites"} · {p.entries.length} workers</p>
+                </div>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${p.status === "paid" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                  {p.status === "paid" ? "Paid" : "Pending"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center p-3 bg-slate-50 rounded-xl">
+                  <p className="text-xs text-slate-500 mb-0.5">Total</p>
+                  <p className="font-bold text-slate-900">{fmt(p.totalAmount)}</p>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-xl">
+                  <p className="text-xs text-green-600 mb-0.5">Paid</p>
+                  <p className="font-bold text-green-700">{fmt(p.paidAmount)}</p>
+                </div>
+                <div className="text-center p-3 bg-orange-50 rounded-xl">
+                  <p className="text-xs text-orange-600 mb-0.5">Pending</p>
+                  <p className="font-bold text-orange-700">{fmt(p.pendingAmount)}</p>
+                </div>
+              </div>
+
+              {/* Entries */}
+              {p.entries.length > 0 && (
+                <div className="border border-slate-100 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Worker</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Days</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Amount</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {p.entries.map(e => (
+                        <tr key={e._id} className="hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-slate-800">{e.worker.name}</td>
+                          <td className="px-3 py-2 text-slate-600">{e.daysWorked}</td>
+                          <td className="px-3 py-2 font-semibold text-slate-900">{fmt(e.totalAmount)}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.status === "paid" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                              {e.status === "paid" ? "Paid" : "Pending"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {p.pendingAmount > 0 && (
+                <button onClick={() => handlePay(p._id)} disabled={paying === p._id}
+                  className="mt-3 w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+                  {paying === p._id ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : <><DollarSign className="w-4 h-4" />Pay {fmt(p.pendingAmount)}</>}
+                </button>
+              )}
             </div>
-            <div className="text-xl font-bold text-slate-900">{s.value}</div>
-            <div className="text-xs text-slate-500">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Week selector */}
-      <div className="flex items-center gap-3 mb-5">
-        <select
-          value={week}
-          onChange={(e) => setWeek(e.target.value)}
-          className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-        >
-          <option>Week 21 (20-26 May 2026)</option>
-          <option>Week 20 (13-19 May 2026)</option>
-          <option>Week 19 (6-12 May 2026)</option>
-        </select>
-        <span className="text-sm text-slate-500">Showing payroll for selected period</span>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Worker</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Site</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Days</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Rate/Day</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Overtime</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Total</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {PAYROLL_DATA.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-700 font-bold text-xs">
-                        {row.name.charAt(0)}
-                      </div>
-                      <span className="font-medium text-slate-900 text-sm">{row.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{row.role}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{row.site}</td>
-                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-medium">
-                    {row.days > 0 ? row.days : "Contract"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-600 text-right">
-                    {row.wage > 0 ? `₹${row.wage}` : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-600 text-right">{row.overtime}h</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="font-bold text-slate-900 text-sm">₹{row.total.toLocaleString("en-IN")}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                      row.status === "paid" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                    }`}>
-                      {row.status === "paid" ? "Paid" : "Pending"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {row.status === "pending" ? (
-                      <button className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg font-medium">
-                        Pay Now
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-400">{row.paidOn}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-50 border-t-2 border-slate-200">
-                <td colSpan={6} className="px-4 py-3 font-bold text-slate-800 text-sm">Total</td>
-                <td className="px-4 py-3 text-right font-black text-slate-900">
-                  ₹{PAYROLL_DATA.reduce((s, r) => s + r.total, 0).toLocaleString("en-IN")}
-                </td>
-                <td colSpan={2} className="px-4 py-3">
-                  <button className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium">
-                    Pay All Pending
-                  </button>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -196,12 +196,12 @@ function SettingsContent() {
               )}
 
               {[
-                { label: "Company Name", value: user?.companyName || "Demo Construction Co.", placeholder: "" },
-                { label: "Admin Name", value: user?.name || "Admin", placeholder: "" },
-                { label: "Email Address", value: user?.email || "", placeholder: "" },
-                { label: "Phone Number", value: "+91 98765 43210", placeholder: "" },
-                { label: "Company Address", value: "Ahmedabad, Gujarat 380001", placeholder: "" },
-                { label: "GST Number", value: "24AABCP1234A1Z5", placeholder: "" },
+                { label: "Company Name",   value: user?.companyName || "", placeholder: "Your company name" },
+                { label: "Admin Name",     value: user?.name || "",        placeholder: "Your name" },
+                { label: "Email Address",  value: user?.email || "",       placeholder: "admin@yourcompany.com" },
+                { label: "Phone Number",   value: "",                      placeholder: "+91 98765 43210" },
+                { label: "Company Address",value: "",                      placeholder: "City, State, PIN" },
+                { label: "GST Number",     value: "",                      placeholder: "e.g. 24AABCP1234A1Z5" },
               ].map((f) => (
                 <div key={f.label}>
                   <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
