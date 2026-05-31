@@ -76,7 +76,7 @@ export function AddStaffMemberModal({
         console.log("✅ Staff member updated:", res);
         setSuccessMsg(`✓ ${form.name} updated successfully.`);
       } else {
-        const res = await api.workers.create({
+        const payload = {
           name: form.name,
           phone: form.phone,
           email: form.email,
@@ -87,7 +87,9 @@ export function AddStaffMemberModal({
           dailyWage: 0,
           monthlySalary: Number(form.monthlySalary) || 0,
           assignedSite: form.assignedSite || undefined,
-        });
+        } as any;
+
+        const res = await api.workers.create(payload);
         
         console.log("✅ Staff member created:", res);
         setSuccessMsg(`✓ ${form.name} added as staff member. They can log in with their email & password.`);
