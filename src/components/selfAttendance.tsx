@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type AttendanceRecord } from "@/lib/api";
 import { uploadFiles } from "@/lib/uploadApi";
 import { ViewPhotosButton } from "@/components/imageViewer";
+import { formatTimeToIST } from "@/lib/time";
 import { X, Camera, Loader2, LogIn, LogOut, Clock, CheckCircle2 } from "lucide-react";
 
 // Photo modal with the staff member's own name locked
@@ -126,11 +127,11 @@ export function MyAttendanceCard({ variant = "full" }: { variant?: "full" | "com
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-slate-50 rounded-xl p-2.5 text-center">
             <div className="text-xs text-slate-400">Check-in</div>
-            <div className="text-sm font-bold text-slate-800">{rec?.timeIn || "—"}</div>
+              <div className="text-sm font-bold text-slate-800">{formatTimeToIST(rec?.checkInAt ?? rec?.timeIn)}</div>
           </div>
           <div className="bg-slate-50 rounded-xl p-2.5 text-center">
             <div className="text-xs text-slate-400">Check-out</div>
-            <div className="text-sm font-bold text-slate-800">{rec?.timeOut || "—"}</div>
+              <div className="text-sm font-bold text-slate-800">{formatTimeToIST(rec?.checkOutAt ?? rec?.timeOut)}</div>
           </div>
           <div className="bg-slate-50 rounded-xl p-2.5 text-center">
             <div className="text-xs text-slate-400">Hours</div>

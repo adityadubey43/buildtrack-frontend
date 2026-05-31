@@ -8,6 +8,7 @@ import { MyAttendanceCard } from "@/components/selfAttendance";
 import { ViewPhotosButton } from "@/components/imageViewer";
 import { getUser } from "@/lib/store";
 import { canSeeFinance } from "@/lib/permissions";
+import { formatTimeToIST } from "@/lib/time";
 import {
   Plus, Download, X, Calendar, UserPlus, UserCheck, Camera, Loader2, Trash2,
   LogIn, LogOut, Clock,
@@ -396,8 +397,8 @@ export default function EmployeeAttendancePage() {
                         <p className="text-sm font-medium text-slate-800 truncate">{w.name}</p>
                         <p className="text-xs text-slate-400 capitalize">{w.role}</p>
                       </div>
-                      <span className="w-20 text-center text-sm text-slate-600">{rec?.timeIn || "—"}</span>
-                      <span className="w-20 text-center text-sm text-slate-600">{rec?.timeOut || "—"}</span>
+                      <span className="w-20 text-center text-sm text-slate-600">{formatTimeToIST(rec?.checkInAt ?? rec?.timeIn)}</span>
+                      <span className="w-20 text-center text-sm text-slate-600">{formatTimeToIST(rec?.checkOutAt ?? rec?.timeOut)}</span>
                       <span className="w-20 text-center text-sm font-semibold text-slate-800">{checkedOut ? `${rec?.hoursWorked ?? 0}h` : "—"}</span>
                       <div className="w-16 flex justify-center">
                         <ViewPhotosButton variant="thumb" images={[
@@ -490,8 +491,8 @@ export default function EmployeeAttendancePage() {
                         <tr key={r._id} className="hover:bg-slate-50">
                           <td className="py-2.5 px-4 font-medium text-slate-800">{r.worker?.name || "—"}</td>
                           <td className="py-2.5 px-3 text-slate-500">{new Date(r.date).toLocaleDateString("en-IN")}</td>
-                          <td className="py-2.5 px-3 text-slate-500">{r.timeIn || "—"}</td>
-                          <td className="py-2.5 px-3 text-slate-500">{r.timeOut || "—"}</td>
+                          <td className="py-2.5 px-3 text-slate-500">{formatTimeToIST(r.checkInAt ?? r.timeIn)}</td>
+                          <td className="py-2.5 px-3 text-slate-500">{formatTimeToIST(r.checkOutAt ?? r.timeOut)}</td>
                           <td className="py-2.5 px-3 font-semibold text-slate-800">{r.hoursWorked ? `${r.hoursWorked}h` : "—"}</td>
                           <td className="py-2.5 px-3">
                             <ViewPhotosButton images={[
