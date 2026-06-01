@@ -66,6 +66,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 export default function ProjectDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const slug = params.slug as string;
 
   const [project, setProject] = useState<Project | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -127,7 +128,7 @@ export default function ProjectDetailPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
           <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
           <p className="text-red-700 font-medium">{error || "Project not found."}</p>
-          <Link href="/dashboard/projects" className="mt-3 inline-block text-sm text-orange-500 underline">
+          <Link href={`/${slug}/dashboard/projects`} className="mt-3 inline-block text-sm text-orange-500 underline">
             Back to Projects
           </Link>
         </div>
@@ -161,7 +162,7 @@ export default function ProjectDetailPage() {
     <div className="p-4 lg:p-6 space-y-6">
       {/* Back + Header */}
       <div>
-        <Link href="/dashboard/projects" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-orange-500 mb-3">
+        <Link href={`/${slug}/dashboard/projects`} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-orange-500 mb-3">
           <ArrowLeft className="w-4 h-4" />
           Back to Projects
         </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useParams } from "next/navigation";
 import Link from "next/link";
 import { getUser, clearUser } from "@/lib/store";
 import type { AuthUser } from "@/lib/api";
@@ -15,64 +15,69 @@ import {
 import { api } from "@/lib/api";
 import { setUser } from "@/lib/store";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/projects", label: "Projects", icon: FolderOpen },
-  { href: "/dashboard/expenses", label: "Expenses", icon: TrendingDown },
-  { href: "/dashboard/payments", label: "Payments Received", icon: Wallet },
-  { href: "/dashboard/attendance/labour", label: "Site Workers", icon: Camera },
-  { href: "/dashboard/attendance/employee", label: "Staff Attendance", icon: UserCheck },
-  { href: "/dashboard/staff-details", label: "Staff Details", icon: Users },
-  { href: "/dashboard/payroll", label: "Payroll", icon: Calculator },
-  { href: "/dashboard/reports", label: "DPR & Reports", icon: FileText },
-  { href: "/dashboard/materials", label: "Materials", icon: Package },
-  { href: "/dashboard/billing", label: "Billing", icon: Receipt },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/dashboard/equipment", label: "Equipment", icon: Wrench },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-];
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useParams();
+  const slug = params.slug as string;
+
   const [user, setUserState] = useState<AuthUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const NAV = [
+    { href: `/${slug}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+    { href: `/${slug}/dashboard/projects`, label: "Projects", icon: FolderOpen },
+    { href: `/${slug}/dashboard/expenses`, label: "Expenses", icon: TrendingDown },
+    { href: `/${slug}/dashboard/payments`, label: "Payments Received", icon: Wallet },
+    { href: `/${slug}/dashboard/attendance/labour`, label: "Site Workers", icon: Camera },
+    { href: `/${slug}/dashboard/attendance/employee`, label: "Staff Attendance", icon: UserCheck },
+    { href: `/${slug}/dashboard/staff-details`, label: "Staff Details", icon: Users },
+    { href: `/${slug}/dashboard/payroll`, label: "Payroll", icon: Calculator },
+    { href: `/${slug}/dashboard/reports`, label: "DPR & Reports", icon: FileText },
+    { href: `/${slug}/dashboard/materials`, label: "Materials", icon: Package },
+    { href: `/${slug}/dashboard/billing`, label: "Billing", icon: Receipt },
+    { href: `/${slug}/dashboard/analytics`, label: "Analytics", icon: BarChart3 },
+    { href: `/${slug}/dashboard/equipment`, label: "Equipment", icon: Wrench },
+    { href: `/${slug}/dashboard/settings`, label: "Settings", icon: Settings },
+  ];
+
   useEffect(() => {
     const u = getUser();
     if (!u) {
-      router.replace("/login");
+      router.replace(`/${slug}`);
       return;
     }
     setUserState(u);
 
-    // Refresh user from API to get latest planStatus (e.g. after subscription activation)
     api.auth.me().then((res) => {
       const fresh = res.user;
       setUser(fresh);
       setUserState(fresh);
-    }).catch(() => {
-      // Silently ignore — stale localStorage data is fine as fallback
-    });
-  }, [router]);
+    }).catch(() => {});
+  }, [router, slug]);
 
-  // Route guard: block screens not permitted for this role (covers direct URL access)
+  // Strip slug prefix for permission check against canonical /dashboard/* paths
   useEffect(() => {
-    if (user && !canAccess(user.role, pathname)) {
-      router.replace("/dashboard");
+    if (user) {
+      const canonicalPath = pathname.replace(`/${slug}`, "") || "/dashboard";
+      if (!canAccess(user.role, canonicalPath)) {
+        router.replace(`/${slug}/dashboard`);
+      }
     }
-  }, [user, pathname, router]);
+  }, [user, pathname, router, slug]);
 
   const handleLogout = () => {
-    // Send the user back to THEIR company login page, not the public landing page
-    const slug = user?.slug;
     clearUser();
-    router.push(slug ? `/c/${slug}` : "/login");
+    router.push(`/${slug}`);
   };
 
-  // Only show nav items this role may access
-  const visibleNav = user ? NAV.filter((item) => canAccess(user.role, item.href)) : [];
+  const visibleNav = user
+    ? NAV.filter((item) => {
+        const canonicalHref = item.href.replace(`/${slug}`, "");
+        return canAccess(user.role, canonicalHref);
+      })
+    : [];
 
   if (!user) {
     return (
@@ -91,7 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="flex items-center justify-between px-4 h-16 border-b border-slate-800">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href={`/${slug}/dashboard`} className="flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
@@ -190,7 +195,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="text-sm font-medium text-slate-900">{user.email}</div>
                     <div className="text-xs text-slate-500">{user.companyName}</div>
                   </div>
-                  <Link href="/dashboard/settings" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                  <Link href={`/${slug}/dashboard/settings`} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
                     <Settings className="w-4 h-4" />Settings
                   </Link>
                   <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 w-full">
@@ -203,7 +208,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          {/* Trial / expired banner — only for trial users, hidden once active */}
           {user.planStatus === "trial" && trialDaysLeft >= 0 && (
             <div className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
               <span>
@@ -212,7 +216,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   : `⏳ Free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""}.`}
                 {" "}Add a payment method to keep access.
               </span>
-              <Link href="/dashboard/settings?tab=billing" className="bg-white text-orange-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-orange-50">
+              <Link href={`/${slug}/dashboard/settings?tab=billing`} className="bg-white text-orange-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-orange-50">
                 Activate Now
               </Link>
             </div>
@@ -220,7 +224,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {user.planStatus === "expired" && (
             <div className="px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 bg-red-600 text-white">
               <span>🔒 Your subscription has expired. Renew to continue using BuildTrack.</span>
-              <Link href="/dashboard/settings?tab=billing" className="bg-white text-red-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-red-50">
+              <Link href={`/${slug}/dashboard/settings?tab=billing`} className="bg-white text-red-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-red-50">
                 Renew Now
               </Link>
             </div>
