@@ -270,25 +270,54 @@ export default function ReportsPage() {
   const [missing, setMissing] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [projectFilter, setProjectFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
-  const loadData = useCallback(async () => {
+  const loadDPRs = useCallback(async (params: Record<string, string> = {}) => {
+    setLoading(true);
     try {
-      const [dprRes, projRes, missingRes] = await Promise.all([
-        api.dpr.list(),
-        api.projects.list({ status: "active", limit: "100" } as Record<string, string>),
-        api.dpr.missingToday().catch(() => ({ data: [] as Project[] })),
-      ]);
+      const dprRes = await api.dpr.list(params);
       setDprs(dprRes.data);
-      setProjects(projRes.data);
-      setMissing(missingRes.data);
     } catch {
-      // keep empty
+      setDprs([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const loadMeta = useCallback(async () => {
+    try {
+      const [projRes, missingRes] = await Promise.all([
+        api.projects.list({ status: "active", limit: "100" } as Record<string, string>),
+        api.dpr.missingToday().catch(() => ({ data: [] as Project[] })),
+      ]);
+      setProjects(projRes.data);
+      setMissing(missingRes.data);
+    } catch {
+      // keep empty
+    }
+  }, []);
+
+  useEffect(() => { loadMeta(); }, [loadMeta]);
+
+  const getDPRQueryParams = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (projectFilter) params.project = projectFilter;
+    if (startDate && endDate) {
+      params.startDate = startDate;
+      params.endDate = endDate;
+    } else if (startDate) {
+      params.date = startDate;
+    } else if (endDate) {
+      params.date = endDate;
+    }
+    return params;
+  }, [projectFilter, startDate, endDate]);
+
+  useEffect(() => {
+    loadDPRs(getDPRQueryParams());
+  }, [getDPRQueryParams, loadDPRs]);
 
   const todayStr = new Date().toDateString();
   const submittedToday = dprs.filter((d) => new Date(d.date).toDateString() === todayStr).length;
@@ -300,7 +329,7 @@ export default function ReportsPage() {
         <SubmitDPRModal
           projects={projects}
           onClose={() => setShowModal(false)}
-          onSaved={loadData}
+          onSaved={() => loadDPRs(getDPRQueryParams())}
         />
       )}
 
@@ -336,6 +365,55 @@ export default function ReportsPage() {
             <div className="text-2xl font-black text-orange-700">{totalPhotos}</div>
             <div className="text-xs text-orange-600 font-medium">Photos Uploaded</div>
           </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-6">
+          <div className="grid lg:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Project</label>
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              >
+                <option value="">All projects</option>
+                {projects.map((p) => (
+                  <option key={p._id} value={p._id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Start date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">End date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProjectFilter("");
+                setStartDate("");
+                setEndDate("");
+              }}
+              className="w-full lg:w-auto px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200"
+            >
+              Clear filters
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mt-3">Showing {dprs.length} DPR{dprs.length !== 1 ? "s" : ""} for {projectFilter ? projects.find((p) => p._id === projectFilter)?.name ?? "selected project" : "all projects"}{startDate || endDate ? ` from ${startDate || "..."} to ${endDate || "..."}` : ""}.</p>
         </div>
 
         {/* Missing today */}

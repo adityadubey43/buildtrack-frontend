@@ -336,6 +336,7 @@ export interface Worker {
   dailyWage: number;
   monthlySalary?: number;
   assignedSite?: { _id: string; name: string };
+  assignedProjects?: { _id: string; name: string }[];
   isActive: boolean;
   createdAt?: string;
 }
@@ -450,6 +451,16 @@ export interface PayrollEntry {
   _id: string;
   worker: { _id: string; name: string; role: string; workerType?: string };
   project?: { _id: string; name: string };
+  projectBreakdown?: {
+    project?: { _id: string; name: string };
+    daysWorked: number;
+    presentDays: number;
+    absentDays: number;
+    halfDays: number;
+    leaveDays: number;
+    overtimeHours: number;
+    amount: number;
+  }[];
   daysWorked: number;
   presentDays: number;
   absentDays: number;
@@ -493,6 +504,7 @@ export interface Material {
   vendor?: string;
   lastPurchasePrice: number;
   onOrder: number;
+  totalUsed: number;
 }
 
 export interface MaterialTransaction {

@@ -172,7 +172,7 @@ export default function PlatformDashboard() {
               ))}
             </div>
             <div className="border-t border-slate-100 mt-4 pt-4">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">By Plan</h4>
+              <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">By Active Plan</h4>
               <div className="space-y-2.5">
                 {stats && Object.entries(stats.byPlan).map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between">
