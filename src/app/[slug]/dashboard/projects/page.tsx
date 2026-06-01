@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, type Project } from "@/lib/api";
 import { getUser } from "@/lib/store";
@@ -99,6 +100,8 @@ function NewProjectModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
+  const params = useParams();
+  const slug = params.slug as string;
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -214,7 +217,7 @@ export default function ProjectsPage() {
                   )}
 
                   <Link
-                    href={`/dashboard/projects/${project._id}`}
+                    href={`/${slug}/dashboard/projects/${project._id}`}
                     className="mt-auto inline-flex items-center justify-center gap-2 w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition-colors"
                   >
                     View Details

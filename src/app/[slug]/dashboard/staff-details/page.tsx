@@ -187,7 +187,7 @@ export default function StaffDetailsPage() {
                     <div className="mt-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 mb-2">Assigned Projects</p>
                       <div className="flex flex-wrap gap-2">
-                        {(member.assignedProjects?.length ? member.assignedProjects : [member.assignedSite]).map((project) => (
+                        {(member.assignedProjects?.length ? member.assignedProjects : (member.assignedSite ? [member.assignedSite] : [])).map((project) => (
                           <span key={project._id} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full">
                             {project.name}
                           </span>

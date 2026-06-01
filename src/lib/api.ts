@@ -504,6 +504,7 @@ export interface Material {
   vendor?: string;
   lastPurchasePrice: number;
   onOrder: number;
+  totalUsed: number;
 }
 
 export interface MaterialTransaction {
