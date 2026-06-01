@@ -93,7 +93,7 @@ function SettingsContent() {
               const updated = { ...user, ...res.user };
               setUser(updated);
               // Reload so dashboard layout re-reads updated planStatus from localStorage
-              window.location.href = "/dashboard/settings?tab=billing&activated=1";
+              window.location.href = `/${user.slug}/dashboard/settings?tab=billing&activated=1`;
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -121,7 +121,7 @@ function SettingsContent() {
               const updated = { ...user, ...res.user };
               setUser(updated);
               // Reload so dashboard layout re-reads updated planStatus from localStorage
-              window.location.href = "/dashboard/settings?tab=billing&activated=1";
+              window.location.href = `/${user.slug}/dashboard/settings?tab=billing&activated=1`;
             } catch (e: unknown) { setSubError(e instanceof Error ? e.message : "Activation failed."); }
             finally { setSubLoading(false); }
           },
@@ -133,7 +133,7 @@ function SettingsContent() {
     }
   };
 
-  const loginUrl = user?.slug ? `${origin}/c/${user.slug}` : "";
+  const loginUrl = user?.slug ? `${origin}/${user.slug}` : "";
   const copyLink = () => {
     if (!loginUrl) return;
     navigator.clipboard.writeText(loginUrl);

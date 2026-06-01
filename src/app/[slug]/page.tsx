@@ -41,7 +41,7 @@ export default function CompanyLoginPage() {
       const res = await api.auth.login({ email: form.email, password: form.password, tenantSlug: slug });
       setToken(res.token);
       setUser(res.user);
-      router.push("/dashboard");
+      router.push(`/${slug}/dashboard`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed.");
       setLoading(false);
@@ -85,7 +85,7 @@ export default function CompanyLoginPage() {
           <h2 className="text-3xl font-bold text-white mb-3">{company?.companyName}</h2>
           <p className="text-slate-300">Sign in to your company workspace to manage projects, attendance and more.</p>
         </div>
-        <p className="text-slate-500 text-xs">Powered by BuildTrack · buildtrack.in/c/{slug}</p>
+        <p className="text-slate-500 text-xs">Powered by BuildTrack · buildtrack.com/{slug}</p>
       </div>
 
       {/* Right form */}

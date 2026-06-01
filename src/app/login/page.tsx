@@ -30,7 +30,7 @@ export default function LoginPage() {
       const res = await api.auth.login({ email: form.email, password: form.password });
       setToken(res.token);
       setUser(res.user);
-      router.push("/dashboard");
+      router.push(`/${res.user.slug}/dashboard`);
     } catch (companyErr: unknown) {
       // Not a company user — maybe this is the BuildTrack platform owner.
       try {

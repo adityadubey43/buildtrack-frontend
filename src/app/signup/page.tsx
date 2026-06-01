@@ -64,7 +64,7 @@ export default function SignupPage() {
     setLoading("trial"); setApiError("");
     try {
       const res = await api.auth.signup({ companyName: form.companyName, adminName: form.adminName, email: form.email, password: form.password, phone: form.phone, plan: selectedPlan });
-      setToken(res.token); setUser(res.user); router.push("/dashboard");
+      setToken(res.token); setUser(res.user); router.push(`/${res.user.slug}/dashboard`);
     } catch (err: unknown) { setApiError(err instanceof Error ? err.message : "Signup failed."); setLoading(null); }
   };
 
@@ -101,7 +101,7 @@ export default function SignupPage() {
                 email: form.email, password: form.password, phone: form.phone,
                 plan: selectedPlan, billing: "yearly",
               });
-              setToken(res.token); setUser(res.user); router.push("/dashboard");
+              setToken(res.token); setUser(res.user); router.push(`/${res.user.slug}/dashboard`);
             } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
           },
         }).open();
@@ -133,7 +133,7 @@ export default function SignupPage() {
                 email: form.email, password: form.password, phone: form.phone,
                 plan: selectedPlan, billing: "monthly",
               });
-              setToken(res.token); setUser(res.user); router.push("/dashboard");
+              setToken(res.token); setUser(res.user); router.push(`/${res.user.slug}/dashboard`);
             } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
           },
         }).open();
