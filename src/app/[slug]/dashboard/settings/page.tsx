@@ -26,13 +26,11 @@ const TABS = [
   { id: "security", label: "Security", icon: Shield },
 ];
 
-const PLANS = [
-  { id: "basic", name: "Basic", price: "₹999/mo", features: "3 projects, 25 workers" },
-  { id: "pro", name: "Pro", price: "₹2,499/mo", features: "Unlimited projects & workers" },
-  { id: "enterprise", name: "Enterprise", price: "Custom", features: "All features + dedicated support" },
+const PLAN_META = [
+  { id: "basic",      name: "Basic",      features: "3 projects, 25 workers" },
+  { id: "pro",        name: "Pro",        features: "Unlimited projects & workers" },
+  { id: "enterprise", name: "Enterprise", features: "All features + dedicated support" },
 ];
-
-const PLAN_PRICES: Record<string, string> = { basic: "₹999", pro: "₹2,499", enterprise: "₹4,999" };
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -47,18 +45,20 @@ function SettingsContent() {
   const [subSuccess, setSubSuccess] = useState(false);
   const [subBilling, setSubBilling] = useState<"monthly" | "yearly">("monthly");
   const [subPlan, setSubPlan] = useState<string>("pro");
+  const [MONTHLY_P, setMONTHLY_P] = useState<Record<string, number>>({ basic: 999, pro: 2499, enterprise: 4999 });
+  const [YEARLY_P,  setYEARLY_P]  = useState<Record<string, number>>({ basic: 10791, pro: 26989, enterprise: 53989 });
+  const [yearlyDiscount, setYearlyDiscount] = useState(10);
 
   useEffect(() => {
     setUserState(getUser());
     setOrigin(window.location.origin);
+    api.pricing.get().then((res) => {
+      setMONTHLY_P(res.data.monthly);
+      setYEARLY_P(res.data.yearly);
+      setYearlyDiscount(res.data.yearlyDiscount);
+    }).catch(() => {});
   }, []);
 
-  const MONTHLY_P: Record<string, number> = { basic: 999, pro: 2499, enterprise: 4999 };
-  const YEARLY_P:  Record<string, number> = {
-    basic:      Math.round(999  * 12 * 0.9),
-    pro:        Math.round(2499 * 12 * 0.9),
-    enterprise: Math.round(4999 * 12 * 0.9),
-  };
   const fmtP = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
   const handleActivateSubscription = async () => {
@@ -255,7 +255,7 @@ function SettingsContent() {
                         </div>
                         <div className="font-black text-2xl text-slate-900">{planName}</div>
                         <div className="text-slate-500 text-sm">
-                          {PLAN_PRICES[plan]}/month
+                          {MONTHLY_P[plan] ? `₹${MONTHLY_P[plan].toLocaleString("en-IN")}` : "Custom"}/month
                           {status === "active" && user?.subscriptionEndsAt
                             ? " · Yearly"
                             : status === "active" ? " · Monthly auto-renewal" : ""}
@@ -339,9 +339,9 @@ function SettingsContent() {
 
                   {/* Plan selector */}
                   <div className="space-y-2 mb-4">
-                    {PLANS.map((plan) => {
-                      const mp = { basic: 999, pro: 2499, enterprise: 4999 }[plan.id as "basic"|"pro"|"enterprise"];
-                      const yp = Math.round(mp * 12 * 0.9);
+                    {PLAN_META.map((plan) => {
+                      const mp = MONTHLY_P[plan.id] ?? 0;
+                      const yp = YEARLY_P[plan.id]  ?? 0;
                       const p  = subBilling === "yearly" ? yp : mp;
                       const lbl = subBilling === "yearly" ? "/yr" : "/mo";
                       const isSelected = subPlan === plan.id;
@@ -371,13 +371,13 @@ function SettingsContent() {
                     </button>
                     <button onClick={() => setSubBilling("yearly")}
                       className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${subBilling === "yearly" ? "bg-white shadow text-slate-900" : "text-slate-500"}`}>
-                      Yearly <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">-10%</span>
+                      Yearly <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">-{yearlyDiscount}%</span>
                     </button>
                   </div>
 
                   {/* Yearly total banner */}
                   {subBilling === "yearly" && (() => {
-                    const yp = Math.round({ basic: 999, pro: 2499, enterprise: 4999 }[subPlan as "basic"|"pro"|"enterprise"] * 12 * 0.9);
+                    const yp = YEARLY_P[subPlan] ?? 0;
                     return (
                       <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
                         <div>
@@ -410,11 +410,13 @@ function SettingsContent() {
               {/* Plan overview */}
               <h3 className="font-semibold text-slate-800 mb-3">All Plans</h3>
               <div className="grid sm:grid-cols-3 gap-3">
-                {PLANS.map((plan) => (
+                {PLAN_META.map((plan) => (
                   <div key={plan.id}
                     className={`p-4 rounded-xl border-2 transition-all ${plan.id === (user?.plan || "pro") ? "border-orange-500 bg-orange-50" : "border-slate-200"}`}>
                     <div className="font-bold text-slate-900">{plan.name}</div>
-                    <div className="text-orange-600 font-semibold text-sm mt-0.5">{plan.price}</div>
+                    <div className="text-orange-600 font-semibold text-sm mt-0.5">
+                      {MONTHLY_P[plan.id] ? `₹${MONTHLY_P[plan.id].toLocaleString("en-IN")}/mo` : "Custom"}
+                    </div>
                     <div className="text-xs text-slate-500 mt-1">{plan.features}</div>
                   </div>
                 ))}

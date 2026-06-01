@@ -49,6 +49,10 @@ export const platformApi = {
   },
   updateCompany: (tenantId: string, body: { isActive?: boolean; plan?: string; planStatus?: string; extendTrialDays?: number }) =>
     preq<{ success: boolean; message: string }>(`/companies/${tenantId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  getPricing: () =>
+    preq<{ success: boolean; data: PricingData }>("/pricing"),
+  setPricing: (body: Partial<{ basic: number; pro: number; enterprise: number; yearlyDiscount: number }>) =>
+    preq<{ success: boolean; message: string; data: PricingData }>("/pricing", { method: "PUT", body: JSON.stringify(body) }),
 };
 
 export interface Company {
@@ -67,6 +71,12 @@ export interface Company {
   projects: number;
   amountPaid: number;   // actual amount paid (yearly full price or monthly price)
   mrr: number;          // monthly equivalent
+}
+
+export interface PricingData {
+  monthly: { basic: number; pro: number; enterprise: number };
+  yearly:  { basic: number; pro: number; enterprise: number };
+  yearlyDiscount: number;
 }
 
 export interface PlatformStats {

@@ -123,7 +123,7 @@ const HOW_IT_WORKS = [
 const PLANS = [
   {
     name: "Basic",
-    price: "₹999",
+    price: "₹1",
     period: "/month",
     description: "Perfect for small contractors managing 1-2 sites",
     borderColor: "border-slate-200",
@@ -143,7 +143,7 @@ const PLANS = [
   },
   {
     name: "Pro",
-    price: "₹2,499",
+    price: "₹1",
     period: "/month",
     description: "For growing companies managing multiple projects",
     borderColor: "border-orange-500",

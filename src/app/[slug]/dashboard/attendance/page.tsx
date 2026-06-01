@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
-export default function AttendanceIndex({ params }: { params: { slug: string } }) {
-  redirect(`/${params.slug}/dashboard/attendance/labour`);
+export default async function AttendanceIndex({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  redirect(`/${slug}/dashboard/attendance/labour`);
 }

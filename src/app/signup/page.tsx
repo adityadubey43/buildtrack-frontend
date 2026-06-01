@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, Eye, EyeOff, CheckCircle, ArrowRight, Clock, Zap } from "lucide-react";
@@ -8,14 +8,6 @@ import { api } from "@/lib/api";
 import { setUser, setToken } from "@/lib/store";
 
 declare global { interface Window { Razorpay: any; } } // eslint-disable-line @typescript-eslint/no-explicit-any
-
-// ── Pricing ───────────────────────────────────────────────────────────────────
-const MONTHLY: Record<string, number> = { basic: 999, pro: 2499, enterprise: 4999 };
-const YEARLY: Record<string, number>  = {
-  basic:      Math.round(999  * 12 * 0.9),
-  pro:        Math.round(2499 * 12 * 0.9),
-  enterprise: Math.round(4999 * 12 * 0.9),
-};
 
 const PLANS = [
   { id: "basic"      as const, name: "Basic",      desc: "Up to 3 projects, 25 workers" },
@@ -45,6 +37,15 @@ export default function SignupPage() {
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [apiError, setApiError]       = useState("");
   const [form, setForm] = useState({ companyName: "", adminName: "", email: "", password: "", phone: "" });
+  const [MONTHLY, setMONTHLY] = useState<Record<string, number>>({ basic: 999, pro: 2499, enterprise: 4999 });
+  const [YEARLY,  setYEARLY]  = useState<Record<string, number>>({ basic: 10791, pro: 26989, enterprise: 53989 });
+
+  useEffect(() => {
+    api.pricing.get().then((res) => {
+      setMONTHLY(res.data.monthly);
+      setYEARLY(res.data.yearly);
+    }).catch(() => {}); // silently use defaults
+  }, []);
 
   const validate = () => {
     const e: Record<string, string> = {};

@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   platformApi, getPlatformToken, getPlatformAdmin, clearPlatform,
-  type PlatformStats, type Company,
+  type PlatformStats, type Company, type PricingData,
 } from "@/lib/platformApi";
 import {
   ShieldCheck, Building2, TrendingUp, Users, Wallet, LogOut, AlertTriangle,
-  Clock, Search, Briefcase, Layers,
+  Clock, Search, Briefcase, Layers, Tag, Save, CheckCircle,
 } from "lucide-react";
 
 function formatINR(n: number) {
@@ -39,10 +39,56 @@ export default function PlatformDashboard() {
   const [statusFilter, setStatusFilter] = useState("");
   const [adminName, setAdminName] = useState("");
 
+  // ── Pricing editor ──────────────────────────────────────────────────────────
+  const [pricing, setPricingState] = useState<PricingData | null>(null);
+  const [pricingForm, setPricingForm] = useState({ basic: "", pro: "", enterprise: "", yearlyDiscount: "" });
+  const [pricingSaving, setPricingSaving] = useState(false);
+  const [pricingSaved, setPricingSaved] = useState(false);
+  const [pricingError, setPricingError] = useState("");
+
   useEffect(() => {
     if (!getPlatformToken()) { router.replace("/platform/login"); return; }
     setAdminName(getPlatformAdmin()?.name || "");
+    // Load current pricing (falls back to defaults if endpoint not deployed yet)
+    platformApi.getPricing().then((res) => {
+      setPricingState(res.data);
+      setPricingForm({
+        basic:          String(res.data.monthly.basic),
+        pro:            String(res.data.monthly.pro),
+        enterprise:     String(res.data.monthly.enterprise),
+        yearlyDiscount: String(res.data.yearlyDiscount),
+      });
+    }).catch(() => {
+      // Backend not updated yet — pre-fill with defaults so the table is still editable
+      setPricingForm({ basic: "999", pro: "2499", enterprise: "4999", yearlyDiscount: "10" });
+      setPricingError("⚠️ Pricing API not available on deployed backend yet. Deploy the backend to enable saving.");
+    });
   }, [router]);
+
+  const handleSavePricing = async () => {
+    setPricingError("");
+    const basic          = Number(pricingForm.basic);
+    const pro            = Number(pricingForm.pro);
+    const enterprise     = Number(pricingForm.enterprise);
+    const yearlyDiscount = Number(pricingForm.yearlyDiscount);
+    if ([basic, pro, enterprise].some((v) => isNaN(v) || v < 0)) {
+      setPricingError("Prices must be non-negative numbers."); return;
+    }
+    if (isNaN(yearlyDiscount) || yearlyDiscount < 0 || yearlyDiscount > 100) {
+      setPricingError("Yearly discount must be between 0 and 100."); return;
+    }
+    setPricingSaving(true);
+    try {
+      const res = await platformApi.setPricing({ basic, pro, enterprise, yearlyDiscount });
+      setPricingState(res.data);
+      setPricingSaved(true);
+      setTimeout(() => setPricingSaved(false), 2500);
+    } catch (e: unknown) {
+      setPricingError(e instanceof Error ? e.message : "Failed to save pricing.");
+    } finally {
+      setPricingSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -166,6 +212,110 @@ export default function PlatformDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Pricing Editor ─────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
+                <Tag className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Plan Pricing</h3>
+                <p className="text-xs text-slate-500">Edit monthly price — yearly is auto-calculated. Changes reflect on signup, settings & landing page.</p>
+              </div>
+            </div>
+            <button
+              onClick={handleSavePricing}
+              disabled={pricingSaving}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                pricingSaved ? "bg-green-500 text-white" : "bg-orange-500 hover:bg-orange-600 text-white"
+              } disabled:opacity-60`}
+            >
+              {pricingSaved
+                ? <><CheckCircle className="w-4 h-4" /> Saved!</>
+                : pricingSaving
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                : <><Save className="w-4 h-4" /> Save Pricing</>}
+            </button>
+          </div>
+
+          {pricingError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-600 text-sm mb-4">{pricingError}</div>
+          )}
+
+          {/* One pricing table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
+                  <th className="text-left px-4 py-3 rounded-l-xl font-medium">Plan</th>
+                  <th className="text-left px-4 py-3 font-medium">Monthly Price (₹)</th>
+                  <th className="text-left px-4 py-3 font-medium">
+                    Yearly Price (₹)
+                    <span className="ml-1 text-slate-400 normal-case font-normal">auto</span>
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium">Features</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(["basic", "pro", "enterprise"] as const).map((plan) => {
+                  const disc    = Number(pricingForm.yearlyDiscount) || 0;
+                  const monthly = Number(pricingForm[plan]) || 0;
+                  const yearly  = Math.round(monthly * 12 * (1 - disc / 100));
+                  const labels  = { basic: "Basic", pro: "Pro", enterprise: "Enterprise" };
+                  const descs   = { basic: "3 projects · 25 workers", pro: "Unlimited projects & workers", enterprise: "All features + dedicated support" };
+                  const badges  = { basic: "bg-slate-100 text-slate-600", pro: "bg-orange-100 text-orange-700", enterprise: "bg-purple-100 text-purple-700" };
+                  return (
+                    <tr key={plan} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold capitalize ${badges[plan]}`}>{labels[plan]}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 text-sm">₹</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={pricingForm[plan]}
+                            onChange={(e) => setPricingForm((f) => ({ ...f, [plan]: e.target.value }))}
+                            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                          />
+                          <span className="text-slate-400 text-xs">/mo</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-700">₹{yearly.toLocaleString("en-IN")}</span>
+                          <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full font-medium">-{disc}%</span>
+                          <span className="text-slate-400 text-xs">/yr</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{descs[plan]}</td>
+                    </tr>
+                  );
+                })}
+                {/* Yearly discount row */}
+                <tr className="bg-slate-50/60">
+                  <td className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide" colSpan={1}>Yearly Discount</td>
+                  <td className="px-4 py-3" colSpan={3}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={pricingForm.yearlyDiscount}
+                        onChange={(e) => setPricingForm((f) => ({ ...f, yearlyDiscount: e.target.value }))}
+                        className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      />
+                      <span className="text-slate-500 text-sm">% off when billed yearly</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* Companies table */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100">

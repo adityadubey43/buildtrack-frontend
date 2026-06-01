@@ -106,6 +106,11 @@ export const api = {
       ),
   },
 
+  // ── Public pricing (no auth) ──
+  pricing: {
+    get: () => request<{ success: boolean; data: { monthly: Record<string,number>; yearly: Record<string,number>; yearlyDiscount: number } }>("/platform/pricing", {}, true),
+  },
+
   // ── Dashboard ──
   dashboard: {
     stats: () => request<{ success: boolean; data: DashboardStats }>("/dashboard/stats"),
