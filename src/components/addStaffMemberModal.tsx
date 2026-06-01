@@ -27,11 +27,12 @@ export function AddStaffMemberModal({
     role: "engineer",
     monthlySalary: "",
     assignedSite: "",
+    assignedProject: "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: string | string[]) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
     if (isEditMode && editingStaff) {
@@ -43,6 +44,7 @@ export function AddStaffMemberModal({
         role: editingStaff.role,
         monthlySalary: editingStaff.monthlySalary ? String(editingStaff.monthlySalary) : "",
         assignedSite: editingStaff.assignedSite?._id || "",
+        assignedProject: editingStaff.assignedSite?._id || "",
       });
     }
   }, [isEditMode, editingStaff]);
@@ -64,7 +66,7 @@ export function AddStaffMemberModal({
           phone: form.phone,
           role: form.role,
           monthlySalary: Number(form.monthlySalary) || 0,
-          assignedSite: form.assignedSite || undefined,
+          assignedSite: form.assignedProject || undefined,
         };
         
         // Only update password if provided
@@ -85,7 +87,7 @@ export function AddStaffMemberModal({
           wageType: "monthly",
           dailyWage: 0,
           monthlySalary: Number(form.monthlySalary) || 0,
-          assignedSite: form.assignedSite || undefined,
+          assignedSite: form.assignedProject || undefined,
         } as any;
 
         const res = await api.workers.create(payload);
@@ -94,7 +96,7 @@ export function AddStaffMemberModal({
 
       onSaved();
       onClose();
-      setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "" });
+      setForm({ name: "", phone: "", email: "", password: "", role: "engineer", monthlySalary: "", assignedSite: "", assignedProject: "" });
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : "Failed to save.";
       console.error(`❌ Error ${isEditMode ? "updating" : "creating"} staff member:`, errorMsg, e);
@@ -169,6 +171,22 @@ export function AddStaffMemberModal({
               <option value="other">Other</option>
             </select>
           </div>
+
+          {projects && projects.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Assign Project</label>
+              <select
+                value={form.assignedProject}
+                onChange={(e) => set("assignedProject", e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Select a project --</option>
+                {projects.map((proj) => (
+                  <option key={proj._id} value={proj._id}>{proj.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Salary</label>

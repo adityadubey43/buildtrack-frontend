@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Search, Loader2, Users, RefreshCw, Trash2, Edit2, Phone, Mail, Briefcase, Calendar, DollarSign } from "lucide-react";
-import { api, type Worker } from "@/lib/api";
+import { api, type Project, type Worker } from "@/lib/api";
 import { AddStaffMemberModal } from "@/components/addStaffMemberModal";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -16,6 +16,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function StaffDetailsPage() {
   const [staff, setStaff] = useState<Worker[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -32,9 +33,22 @@ export default function StaffDetailsPage() {
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await api.projects.list({ limit: "200" });
+      setProjects(res.data);
+    } catch (e) {
+      console.error("❌ Error loading projects:", e);
+    }
+  }, []);
+
   useEffect(() => {
-    loadStaff().finally(() => setLoading(false));
-  }, [loadStaff]);
+    const load = async () => {
+      await Promise.all([loadStaff(), loadProjects()]);
+      setLoading(false);
+    };
+    load();
+  }, [loadStaff, loadProjects]);
 
   // Auto-refresh every 5 seconds
   useEffect(() => {
@@ -169,6 +183,18 @@ export default function StaffDetailsPage() {
                       <span className="text-slate-600">{new Date(member.createdAt || new Date()).toLocaleDateString("en-IN")}</span>
                     </div>
                   </div>
+                  {(member.assignedProjects?.length || member.assignedSite) ? (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 mb-2">Assigned Projects</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(member.assignedProjects?.length ? member.assignedProjects : [member.assignedSite]).map((project) => (
+                          <span key={project._id} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full">
+                            {project.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex gap-2">
@@ -192,6 +218,7 @@ export default function StaffDetailsPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <AddStaffMemberModal
+          projects={projects}
           editingStaff={selectedStaff || undefined}
           onClose={() => { setShowModal(false); setSelectedStaff(null); }}
           onSaved={() => loadStaff()}

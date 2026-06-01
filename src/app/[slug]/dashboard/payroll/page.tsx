@@ -1,22 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Calculator, CheckCircle, Clock, Users, DollarSign, Loader2 } from "lucide-react";
-import { api, type Payroll } from "@/lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { Calculator, CheckCircle, Clock, Users, DollarSign, Loader2, Wallet, ArrowRight, LayoutGrid } from "lucide-react";
+import { api, type Payroll, type Project, type PayrollEntry } from "@/lib/api";
 
 function fmt(n: number) { return `₹${n.toLocaleString("en-IN")}`; }
+function todayStr() { return new Date().toISOString().split("T")[0]; }
+function startOfWeek() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split("T")[0];
+}
 
 export default function PayrollPage() {
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [loading, setLoading]   = useState(true);
   const [paying, setPaying]     = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const [workerType, setWorkerType] = useState<"labour" | "employee">("employee");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [selectedPayrollId, setSelectedPayrollId] = useState<string | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<PayrollEntry | null>(null);
+  const [payOption, setPayOption] = useState<"site" | "split">("site");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [payProcessing, setPayProcessing] = useState(false);
+
+  const loadPayrolls = useCallback(async () => {
+    try {
+      const res = await api.payroll.list();
+      setPayrolls(res.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await api.projects.list({ status: "active", limit: "200" });
+      setProjects(res.data);
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
 
   useEffect(() => {
-    api.payroll.list()
-      .then(r => setPayrolls(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+    loadPayrolls();
+    loadProjects();
+  }, [loadPayrolls, loadProjects]);
 
   const totalPaid    = payrolls.reduce((s, p) => s + p.paidAmount, 0);
   const totalPending = payrolls.reduce((s, p) => s + p.pendingAmount, 0);
@@ -30,6 +65,95 @@ export default function PayrollPage() {
     finally { setPaying(null); }
   };
 
+  const handlePayrollCalculate = async () => {
+    setCalculating(true);
+    try {
+      await api.payroll.calculate({ workerType, startDate: startOfWeek(), endDate: todayStr(), cycle: workerType === "employee" ? "monthly" : "weekly" });
+      const res = await api.payroll.list();
+      setPayrolls(res.data);
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to calculate payroll.";
+      alert(`Failed to calculate payroll. ${message}`);
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const openPayEntryModal = (payrollId: string, entry: PayrollEntry) => {
+    setSelectedPayrollId(payrollId);
+    setSelectedEntry(entry);
+    setSelectedProjectId(entry.project?._id || entry.projectBreakdown?.[0]?.project?._id || "");
+    setPayOption(entry.projectBreakdown && entry.projectBreakdown.length > 1 ? "split" : "site");
+    setPayModalOpen(true);
+  };
+
+  const closePayEntryModal = () => {
+    setPayModalOpen(false);
+    setSelectedEntry(null);
+    setSelectedPayrollId(null);
+    setSelectedProjectId("");
+    setPayOption("site");
+  };
+
+  const calculateEntrySplit = (entry: PayrollEntry) => {
+    if (!entry.projectBreakdown || entry.projectBreakdown.length === 0) return [];
+    const count = entry.projectBreakdown.length;
+    const base = Math.floor(entry.totalAmount / count);
+    let remainder = entry.totalAmount - base * count;
+    return entry.projectBreakdown.map((item) => {
+      const value = base + (remainder > 0 ? 1 : 0);
+      remainder -= 1;
+      return { project: item.project, amount: value };
+    });
+  };
+
+  const handlePayEntry = async () => {
+    if (!selectedEntry) return;
+    setPayProcessing(true);
+    try {
+      const expensesToCreate: Array<{ project: string; amount: number }> = [];
+      if (payOption === "split" && selectedEntry.projectBreakdown && selectedEntry.projectBreakdown.length > 1) {
+        const splits = calculateEntrySplit(selectedEntry);
+        splits.forEach((split) => {
+          if (split.project?._id) {
+            expensesToCreate.push({ project: split.project._id, amount: split.amount });
+          }
+        });
+      } else {
+        const projectId = selectedProjectId || selectedEntry.project?._id || selectedEntry.projectBreakdown?.[0]?.project?._id;
+        if (!projectId) {
+          alert("Please select a site before marking payroll as paid.");
+          return;
+        }
+        expensesToCreate.push({ project: projectId, amount: selectedEntry.totalAmount });
+      }
+
+      for (const expense of expensesToCreate) {
+        await api.expenses.create({
+          project: expense.project,
+          type: "labour",
+          description: `Payroll payment for ${selectedEntry.worker.name}`,
+          amount: expense.amount,
+          paymentMode: "bank",
+          date: todayStr(),
+        });
+      }
+
+      if (!selectedPayrollId) throw new Error("Payroll record is missing.");
+      const res = await api.payroll.pay(selectedPayrollId, { entryId: selectedEntry._id, paymentMode: "bank" });
+      setPayrolls(prev => prev.map(p => p._id === res.data._id ? res.data : p));
+      setPayModalOpen(false);
+      setSelectedEntry(null);
+    } catch (err: unknown) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to pay payroll entry.";
+      alert(message);
+    } finally {
+      setPayProcessing(false);
+    }
+  };
+
   if (loading) return (
     <div className="p-6 flex items-center justify-center min-h-64">
       <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
@@ -38,10 +162,31 @@ export default function PayrollPage() {
 
   return (
     <div className="p-4 lg:p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Payroll</h1>
           <p className="text-slate-500 text-sm">Manage worker payments</p>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+            <LayoutGrid className="w-4 h-4 text-slate-500" />
+            <select
+              value={workerType}
+              onChange={(e) => setWorkerType(e.target.value as "labour" | "employee")}
+              className="bg-transparent text-sm text-slate-700 outline-none"
+            >
+              <option value="employee">Employee</option>
+              <option value="labour">Labour</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handlePayrollCalculate}
+            disabled={calculating}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
+          >
+            {calculating ? <><Loader2 className="w-4 h-4 animate-spin" />Calculating...</> : <><Calculator className="w-4 h-4" />Calculate payroll</>}
+          </button>
         </div>
       </div>
 
@@ -109,6 +254,7 @@ export default function PayrollPage() {
                         <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Days</th>
                         <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Amount</th>
                         <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Status</th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-slate-500">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -122,6 +268,19 @@ export default function PayrollPage() {
                               {e.status === "paid" ? "Paid" : "Pending"}
                             </span>
                           </td>
+                          <td className="px-3 py-2">
+                            {e.status === "pending" ? (
+                              <button
+                                type="button"
+                                onClick={() => openPayEntryModal(p._id, e)}
+                                className="rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white hover:bg-orange-600"
+                              >
+                                Pay
+                              </button>
+                            ) : (
+                              <span className="text-xs text-slate-500">—</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -129,14 +288,110 @@ export default function PayrollPage() {
                 </div>
               )}
 
-              {p.pendingAmount > 0 && (
-                <button onClick={() => handlePay(p._id)} disabled={paying === p._id}
-                  className="mt-3 w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
-                  {paying === p._id ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : <><DollarSign className="w-4 h-4" />Pay {fmt(p.pendingAmount)}</>}
-                </button>
-              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {payModalOpen && selectedEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <p className="text-sm text-slate-500">Pay payroll entry</p>
+                <h2 className="text-xl font-semibold text-slate-900">{selectedEntry.worker.name}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closePayEntryModal}
+                className="rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs uppercase text-slate-500">Amount</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-900">{fmt(selectedEntry.totalAmount)}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs uppercase text-slate-500">Days worked</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-900">{selectedEntry.daysWorked}</p>
+                </div>
+              </div>
+
+              {selectedEntry.projectBreakdown && selectedEntry.projectBreakdown.length > 1 ? (
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-slate-700">Multiple project breakdown</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPayOption("site")}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${payOption === "site" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600"}`}
+                      >
+                        Single site
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayOption("split")}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${payOption === "split" ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600"}`}
+                      >
+                        Split equally
+                      </button>
+                    </div>
+                  </div>
+
+                  {payOption === "site" ? (
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Site</label>
+                      <select
+                        value={selectedProjectId}
+                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
+                      >
+                        <option value="">Select a site</option>
+                        {selectedEntry.projectBreakdown.map((item) => item.project && (
+                          <option key={item.project._id} value={item.project._id}>{item.project.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {calculateEntrySplit(selectedEntry).map((split) => (
+                        <div key={split.project?._id} className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">
+                          <div className="font-semibold text-slate-900">{split.project?.name}</div>
+                          <div className="mt-1 text-slate-600">{fmt(split.amount)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm text-slate-600">Payment will be posted to {selectedEntry.project?.name || "selected site"}.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closePayEntryModal}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePayEntry}
+                disabled={payProcessing || (payOption === "site" && !selectedProjectId && selectedEntry.projectBreakdown && selectedEntry.projectBreakdown.length > 1)}
+                className="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60"
+              >
+                {payProcessing ? <><Loader2 className="w-4 h-4 animate-spin" />Processing...</> : "Pay entry"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
