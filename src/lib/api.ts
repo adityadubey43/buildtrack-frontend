@@ -84,6 +84,8 @@ export const api = {
       phone?: string;
       plan: string;
       billing: "monthly" | "yearly";
+      // ✅ IMPORTANT: amount they actually paid (for historical pricing safeguard)
+      amount?: number;
     }) =>
       request<AuthResponse>("/razorpay/verify-and-signup", {
         method: "POST",
@@ -98,6 +100,8 @@ export const api = {
       razorpay_signature: string;
       billing: "monthly" | "yearly";
       plan?: string;
+      // ✅ IMPORTANT: amount they actually paid (for historical pricing safeguard)
+      amount?: number;
     }) =>
       request<{ success: boolean; message: string; user: AuthUser }>(
         "/razorpay/activate-subscription",

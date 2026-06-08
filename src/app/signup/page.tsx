@@ -101,6 +101,8 @@ export default function SignupPage() {
                 companyName: form.companyName, adminName: form.adminName,
                 email: form.email, password: form.password, phone: form.phone,
                 plan: selectedPlan, billing: "yearly",
+                // ✅ SAFEGUARD: Send actual amount paid for historical pricing safeguard
+                amount: YEARLY[selectedPlan],
               });
               setToken(res.token); setUser(res.user); router.push(`/${res.user.slug}/dashboard`);
             } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
@@ -133,6 +135,8 @@ export default function SignupPage() {
                 companyName: form.companyName, adminName: form.adminName,
                 email: form.email, password: form.password, phone: form.phone,
                 plan: selectedPlan, billing: "monthly",
+                // ✅ SAFEGUARD: Send actual amount paid for historical pricing safeguard
+                amount: MONTHLY[selectedPlan],
               });
               setToken(res.token); setUser(res.user); router.push(`/${res.user.slug}/dashboard`);
             } catch (e: unknown) { setApiError(e instanceof Error ? e.message : "Account creation failed."); setLoading(null); }
