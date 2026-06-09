@@ -89,6 +89,8 @@ function SettingsContent() {
                 razorpay_order_id: r.razorpay_order_id,
                 razorpay_signature: r.razorpay_signature,
                 billing: "yearly", plan: subPlan,
+                // ✅ SAFEGUARD: Send actual amount paid for historical pricing safeguard
+                amount: YEARLY_P[subPlan],
               });
               const updated = { ...user, ...res.user };
               setUser(updated);
@@ -117,6 +119,8 @@ function SettingsContent() {
                 razorpay_subscription_id: r.razorpay_subscription_id,
                 razorpay_signature: r.razorpay_signature || "",
                 billing: "monthly", plan: subPlan,
+                // ✅ SAFEGUARD: Send actual amount paid for historical pricing safeguard
+                amount: MONTHLY_P[subPlan],
               });
               const updated = { ...user, ...res.user };
               setUser(updated);
