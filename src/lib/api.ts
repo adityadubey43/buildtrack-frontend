@@ -270,6 +270,7 @@ export const api = {
     migrate: () => request<{ success: boolean; message: string }>("/vendors/migrate", { method: "POST" }),
     addBill: (vendorId: string, body: { amount: number; date: string; description?: string; invoiceNumber?: string; project?: string; notes?: string }) =>
       request<{ success: boolean; data: VendorBill }>(`/vendors/${vendorId}/bills`, { method: "POST", body: JSON.stringify(body) }),
+    delete:     (id: string) => request(`/vendors/${id}`, { method: "DELETE" }),
     deleteBill: (billId: string) => request(`/vendors/bills/${billId}`, { method: "DELETE" }),
   },
 

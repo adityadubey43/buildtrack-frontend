@@ -18,16 +18,20 @@ function VendorModal({
   initial,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   initial?: VendorSummary;
   onClose: () => void;
   onSaved: () => void;
+  onDeleted?: () => void;
 }) {
   const [form, setForm] = useState({
     name: initial?.name ?? "", phone: initial?.phone ?? "",
     gstNumber: initial?.gstNumber ?? "", address: initial?.address ?? "", notes: initial?.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [err, setErr] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -41,6 +45,16 @@ function VendorModal({
       onSaved(); onClose();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed to save."); }
     finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!initial) return;
+    setDeleting(true); setErr("");
+    try {
+      await api.vendors.delete(initial._id);
+      onDeleted?.(); onClose();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed to delete."); setConfirmDelete(false); }
+    finally { setDeleting(false); }
   };
 
   return (
@@ -79,7 +93,29 @@ function VendorModal({
             <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
           </div>
+          {initial && confirmDelete && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+              <p className="font-semibold mb-2">Delete &quot;{initial.name}&quot;?</p>
+              <p className="text-xs text-red-500 mb-3">This will remove the vendor. Bills and linked expenses will not be deleted.</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setConfirmDelete(false)}
+                  className="flex-1 px-3 py-2 border border-red-200 rounded-lg text-xs font-medium text-red-600 hover:bg-red-100">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleDelete} disabled={deleting}
+                  className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold">
+                  {deleting ? "Deleting..." : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-3 pt-1">
+            {initial && !confirmDelete && (
+              <button type="button" onClick={() => setConfirmDelete(true)}
+                className="px-4 py-2.5 border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium">
+                Delete
+              </button>
+            )}
             <button type="button" onClick={onClose}
               className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={saving}
@@ -435,6 +471,7 @@ export default function VendorsPage() {
           initial={editVendor}
           onClose={() => { setShowModal(false); setEditVendor(undefined); }}
           onSaved={() => { setShowModal(false); setEditVendor(undefined); loadVendors(); }}
+          onDeleted={() => { setShowModal(false); setEditVendor(undefined); loadVendors(); }}
         />
       )}
 
