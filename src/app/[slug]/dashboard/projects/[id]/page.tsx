@@ -13,7 +13,7 @@ import { canSeeFinance } from "@/lib/permissions";
 import { formatTimeToIST } from "@/lib/time";
 import {
   ArrowLeft, MapPin, Calendar, Building2, AlertTriangle, TrendingUp, TrendingDown,
-  Wallet, DollarSign, Receipt, FileText, Camera, Layers, Users,
+  Wallet, DollarSign, Receipt, FileText, Camera, Layers, Users, Plus, X, CheckCircle2, Circle,
 } from "lucide-react";
 
 function formatINR(n: number) {
@@ -49,6 +49,168 @@ const STATUS_BADGE: Record<string, string> = {
   late: "bg-yellow-100 text-yellow-700",
   "half-day": "bg-orange-100 text-orange-700",
 };
+
+// ── Stages Manager ────────────────────────────────────────────────────────────
+type Stage = { _id?: string; name: string; weight: number; isCompleted: boolean; completedAt?: string };
+
+function StagesManager({
+  project, isAdmin, onUpdated,
+}: {
+  project: Project;
+  isAdmin: boolean;
+  onUpdated: (p: Project) => void;
+}) {
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newWeight, setNewWeight] = useState("");
+
+  useEffect(() => {
+    setStages((project.phases || []).map((p) => ({
+      _id: p._id, name: p.name, weight: p.weight ?? 0, isCompleted: p.isCompleted, completedAt: p.completedAt,
+    })));
+    setDirty(false);
+  }, [project._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalWeight = stages.reduce((s, p) => s + Number(p.weight), 0);
+  const progress = stages.filter((s) => s.isCompleted).reduce((s, p) => s + Number(p.weight), 0);
+
+  const toggle = (i: number) => {
+    setStages((prev) => prev.map((s, idx) => idx === i ? { ...s, isCompleted: !s.isCompleted } : s));
+    setDirty(true);
+  };
+
+  const remove = (i: number) => {
+    setStages((prev) => prev.filter((_, idx) => idx !== i));
+    setDirty(true);
+  };
+
+  const changeWeight = (i: number, val: string) => {
+    setStages((prev) => prev.map((s, idx) => idx === i ? { ...s, weight: Number(val) || 0 } : s));
+    setDirty(true);
+  };
+
+  const addStage = () => {
+    if (!newName.trim()) return;
+    setStages((prev) => [...prev, { name: newName.trim(), weight: Number(newWeight) || 0, isCompleted: false }]);
+    setNewName(""); setNewWeight("");
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await api.projects.updateStages(project._id, stages);
+      onUpdated(res.data);
+      setDirty(false);
+    } catch { alert("Failed to save stages."); }
+    finally { setSaving(false); }
+  };
+
+  const weightOk = totalWeight === 100 || stages.length === 0;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-slate-800 text-sm">Construction Stages</h3>
+        <div className="flex items-center gap-2">
+          {!weightOk && (
+            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+              Weights sum to {totalWeight}% (should be 100%)
+            </span>
+          )}
+          {dirty && isAdmin && (
+            <button onClick={save} disabled={saving}
+              className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg">
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-sm font-bold text-slate-900 w-10 text-right">{Math.round(progress)}%</span>
+      </div>
+
+      {/* Stage rows */}
+      <div className="space-y-2">
+        {stages.length === 0 && (
+          <p className="text-sm text-slate-400 text-center py-4">No stages yet. Add your first stage below.</p>
+        )}
+        {stages.map((s, i) => (
+          <div key={i} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+            s.isCompleted ? "bg-green-50 border-green-200" : "bg-slate-50 border-slate-200"
+          }`}>
+            <button onClick={() => isAdmin && toggle(i)} disabled={!isAdmin}
+              className={`flex-shrink-0 ${isAdmin ? "cursor-pointer" : "cursor-default"}`}>
+              {s.isCompleted
+                ? <CheckCircle2 className="w-5 h-5 text-green-600" />
+                : <Circle className="w-5 h-5 text-slate-300" />}
+            </button>
+            <span className={`flex-1 text-sm font-medium ${s.isCompleted ? "text-green-800 line-through" : "text-slate-800"}`}>
+              {s.name}
+            </span>
+            {s.isCompleted && s.completedAt && (
+              <span className="text-xs text-green-600 hidden sm:block">
+                {new Date(s.completedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </span>
+            )}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {isAdmin ? (
+                <input
+                  type="number" min="0" max="100" value={s.weight}
+                  onChange={(e) => changeWeight(i, e.target.value)}
+                  className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              ) : (
+                <span className="text-xs font-semibold text-slate-600 w-14 text-center">{s.weight}%</span>
+              )}
+              <span className="text-xs text-slate-400">%</span>
+            </div>
+            {isAdmin && (
+              <button onClick={() => remove(i)} className="text-slate-300 hover:text-red-500 flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add new stage — admin only */}
+      {isAdmin && (
+        <div className="flex items-center gap-2 mt-3">
+          <input
+            type="text" placeholder="Stage name (e.g. Foundation)" value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addStage()}
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+          <input
+            type="number" placeholder="%" min="0" max="100" value={newWeight}
+            onChange={(e) => setNewWeight(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addStage()}
+            className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+          <button onClick={addStage}
+            className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg flex-shrink-0">
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {stages.length > 0 && (
+        <p className="text-xs text-slate-400 mt-2">
+          {stages.filter((s) => s.isCompleted).length} of {stages.length} stages complete · Weights total: <span className={weightOk ? "text-green-600" : "text-amber-600"}>{totalWeight}%</span>
+        </p>
+      )}
+    </div>
+  );
+}
 
 type TabId = "overview" | "expenses" | "payments" | "bills" | "dpr" | "attendance";
 
@@ -256,23 +418,12 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              {/* Phases */}
-              {project.phases && project.phases.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-slate-800 text-sm mb-3">Phases</h3>
-                  <div className="space-y-2">
-                    {project.phases.map((ph) => (
-                      <div key={ph._id} className="flex items-center gap-3">
-                        <span className="text-sm text-slate-600 w-28 flex-shrink-0 truncate">{ph.name}</span>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${ph.completionPct}%` }} />
-                        </div>
-                        <span className="text-xs font-medium text-slate-600 w-9 text-right">{ph.completionPct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Stages */}
+              <StagesManager
+                project={project}
+                isAdmin={getUser()?.role === "admin" || getUser()?.role === "engineer" || getUser()?.role === "partner"}
+                onUpdated={(updated) => setProject(updated)}
+              />
 
               {/* Expense breakdown by type — finance roles only */}
               {showFinance && Object.keys(expenseByType).length > 0 && (
