@@ -22,7 +22,8 @@ function formatINR(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
-function fmtDate(d: string) {
+function fmtDate(d: string | undefined) {
+  if (!d) return "—";
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
