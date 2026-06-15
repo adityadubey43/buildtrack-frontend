@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type VendorSummary, type VendorLedger, type VendorBill, type Expense } from "@/lib/api";
-import { Plus, X, Store, ArrowLeft, AlertCircle, CheckCircle, Clock, Pencil, FileText, Wallet } from "lucide-react";
+import { Plus, X, Store, ArrowLeft, AlertCircle, CheckCircle, Clock, Pencil } from "lucide-react";
 
 function fmt(n: number) {
   if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
@@ -206,6 +206,39 @@ function LedgerView({
     } catch { alert("Failed to delete bill."); }
   };
 
+  // Merge bills and expenses into one chronological list
+  type LedgerRow =
+    | { kind: "bill"; date: string; id: string; description: string; ref: string; bill: number; paid: number }
+    | { kind: "payment"; date: string; id: string; description: string; ref: string; bill: number; paid: number };
+
+  const rows: LedgerRow[] = [
+    ...bills.map((b: VendorBill) => ({
+      kind: "bill" as const,
+      date: b.date,
+      id: b._id,
+      description: b.description || "Bill",
+      ref: b.invoiceNumber || "",
+      bill: b.amount,
+      paid: 0,
+    })),
+    ...expenses.map((e: Expense) => ({
+      kind: "payment" as const,
+      date: e.date,
+      id: e._id,
+      description: e.description,
+      ref: e.paymentMode || "",
+      bill: 0,
+      paid: e.amount,
+    })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Running balance after each row
+  let running = 0;
+  const rowsWithBalance = rows.map((r) => {
+    running += r.bill - r.paid;
+    return { ...r, balance: running };
+  });
+
   return (
     <>
       {showAddBill && (
@@ -217,7 +250,7 @@ function LedgerView({
         />
       )}
 
-      <div className="p-4 lg:p-6 space-y-6">
+      <div className="p-4 lg:p-6 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -240,149 +273,98 @@ function LedgerView({
           </button>
         </div>
 
-        {/* Tally summary */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Total Billed</div>
-            <div className="text-2xl font-black text-slate-800">{fmt(summary.totalBilled)}</div>
-            <div className="text-xs text-slate-400 mt-1">{bills.length} bill{bills.length !== 1 ? "s" : ""}</div>
+        {/* Summary strip */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+            <div className="text-xs text-slate-500 font-medium mb-0.5">Total Billed</div>
+            <div className="text-lg font-black text-slate-800">{fmt(summary.totalBilled)}</div>
           </div>
-          <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
-            <div className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">Total Paid</div>
-            <div className="text-2xl font-black text-green-700">{fmt(summary.totalPaid)}</div>
-            <div className="text-xs text-green-500 mt-1">{expenses.length} payment{expenses.length !== 1 ? "s" : ""}</div>
+          <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-center">
+            <div className="text-xs text-green-600 font-medium mb-0.5">Total Paid</div>
+            <div className="text-lg font-black text-green-700">{fmt(summary.totalPaid)}</div>
           </div>
-          <div className={`rounded-2xl p-4 text-center border ${
-            summary.outstanding <= 0 ? "bg-green-50 border-green-100" : "bg-red-50 border-red-100"
-          }`}>
-            <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${summary.outstanding <= 0 ? "text-green-600" : "text-red-500"}`}>
-              Outstanding
-            </div>
-            <div className={`text-2xl font-black ${summary.outstanding <= 0 ? "text-green-700" : "text-red-600"}`}>
+          <div className={`rounded-xl p-3 text-center border ${summary.outstanding <= 0 ? "bg-green-50 border-green-100" : "bg-red-50 border-red-100"}`}>
+            <div className={`text-xs font-medium mb-0.5 ${summary.outstanding <= 0 ? "text-green-600" : "text-red-500"}`}>Outstanding</div>
+            <div className={`text-lg font-black ${summary.outstanding <= 0 ? "text-green-700" : "text-red-600"}`}>
               {summary.outstanding <= 0 ? "Cleared" : fmt(summary.outstanding)}
             </div>
           </div>
         </div>
 
-        {/* Bills table */}
+        {/* Tally-style unified ledger */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-orange-500" />
-            <h2 className="font-bold text-slate-900">Bills Received from Vendor</h2>
-            <span className="ml-auto text-xs text-slate-400">{bills.length} entries</span>
-          </div>
-          {bills.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">
-              <p className="text-sm">No bills added yet.</p>
-              <button onClick={() => setShowAddBill(true)} className="text-orange-500 text-sm hover:underline mt-1">
-                Add first bill →
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-500 font-semibold">
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Description</th>
-                    <th className="px-4 py-3 text-left">Invoice #</th>
-                    <th className="px-4 py-3 text-right">Amount</th>
-                    <th className="px-4 py-3" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-white text-xs uppercase font-semibold">
+                  <th className="px-4 py-3 text-left">Date</th>
+                  <th className="px-4 py-3 text-left">Particulars</th>
+                  <th className="px-4 py-3 text-left">Ref / Mode</th>
+                  <th className="px-4 py-3 text-right">Bill (Dr)</th>
+                  <th className="px-4 py-3 text-right">Paid (Cr)</th>
+                  <th className="px-4 py-3 text-right">Balance</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {rowsWithBalance.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-400 text-sm">
+                      No transactions yet.{" "}
+                      <button onClick={() => setShowAddBill(true)} className="text-orange-500 hover:underline">Add first bill →</button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {bills.map((bill: VendorBill) => (
-                    <tr key={bill._id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{fmtDate(bill.date)}</td>
-                      <td className="px-4 py-3 text-slate-800 max-w-[200px] truncate">{bill.description || "—"}</td>
-                      <td className="px-4 py-3 text-slate-500">{bill.invoiceNumber || "—"}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(bill.amount)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button onClick={() => handleDeleteBill(bill._id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors">
-                          <X className="w-4 h-4" />
+                ) : rowsWithBalance.map((row) => (
+                  <tr key={row.id} className={`hover:bg-slate-50 ${row.kind === "bill" ? "" : "bg-green-50/30"}`}>
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{fmtDate(row.date)}</td>
+                    <td className="px-4 py-3 max-w-[180px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${row.kind === "bill" ? "bg-orange-400" : "bg-green-500"}`} />
+                        <span className="text-slate-800 truncate">{row.description}</span>
+                      </div>
+                      <div className="text-xs text-slate-400 ml-3">{row.kind === "bill" ? "Bill" : "Payment"}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{row.ref || "—"}</td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      {row.bill > 0 ? <span className="text-slate-900">{fmt(row.bill)}</span> : <span className="text-slate-200">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      {row.paid > 0 ? <span className="text-green-600">{fmt(row.paid)}</span> : <span className="text-slate-200">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold">
+                      <span className={row.balance > 0 ? "text-red-500" : row.balance < 0 ? "text-green-600" : "text-slate-400"}>
+                        {row.balance === 0 ? "Nil" : fmt(Math.abs(row.balance))}
+                        {row.balance > 0 ? " Dr" : row.balance < 0 ? " Cr" : ""}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      {row.kind === "bill" && (
+                        <button onClick={() => handleDeleteBill(row.id)}
+                          className="text-slate-200 hover:text-red-500 transition-colors">
+                          <X className="w-3.5 h-3.5" />
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
-                    <td colSpan={3} className="px-4 py-3 text-slate-700 text-sm">Total Billed</td>
-                    <td className="px-4 py-3 text-right text-slate-900">{fmt(summary.totalBilled)}</td>
-                    <td />
+                      )}
+                    </td>
                   </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Payments made (from expenses) */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-green-600" />
-            <h2 className="font-bold text-slate-900">Payments Made to Vendor</h2>
-            <span className="ml-auto text-xs text-slate-400">{expenses.length} entries</span>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-800 text-white font-bold text-sm border-t-2 border-slate-300">
+                  <td colSpan={3} className="px-4 py-3">Closing Balance</td>
+                  <td className="px-4 py-3 text-right">{fmt(summary.totalBilled)}</td>
+                  <td className="px-4 py-3 text-right text-green-300">{fmt(summary.totalPaid)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={summary.outstanding > 0 ? "text-red-300" : "text-green-300"}>
+                      {summary.outstanding === 0 ? "Nil" : fmt(Math.abs(summary.outstanding))}
+                      {summary.outstanding > 0 ? " Dr" : summary.outstanding < 0 ? " Cr" : ""}
+                    </span>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
           </div>
-          {expenses.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-sm">No payments recorded yet. Add expenses linked to this vendor.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-500 font-semibold">
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Description</th>
-                    <th className="px-4 py-3 text-left">Project</th>
-                    <th className="px-4 py-3 text-left">Mode</th>
-                    <th className="px-4 py-3 text-right">Paid</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {expenses.map((exp: Expense) => (
-                    <tr key={exp._id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{fmtDate(exp.date)}</td>
-                      <td className="px-4 py-3 text-slate-800 max-w-[200px] truncate">{exp.description}</td>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                        {(exp.project as { name?: string })?.name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 capitalize">{exp.paymentMode}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-green-700">{fmt(exp.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold">
-                    <td colSpan={4} className="px-4 py-3 text-slate-700 text-sm">Total Paid</td>
-                    <td className="px-4 py-3 text-right text-green-700">{fmt(summary.totalPaid)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
         </div>
-
-        {/* Outstanding callout */}
-        {summary.outstanding !== 0 && (
-          <div className={`rounded-2xl p-4 flex items-center justify-between ${
-            summary.outstanding > 0 ? "bg-red-50 border border-red-100" : "bg-green-50 border border-green-100"
-          }`}>
-            <div className="flex items-center gap-2">
-              {summary.outstanding > 0
-                ? <AlertCircle className="w-5 h-5 text-red-500" />
-                : <CheckCircle className="w-5 h-5 text-green-600" />}
-              <span className={`text-sm font-semibold ${summary.outstanding > 0 ? "text-red-700" : "text-green-700"}`}>
-                {summary.outstanding > 0
-                  ? `₹${Math.abs(summary.outstanding).toLocaleString("en-IN")} still to be paid`
-                  : `Overpaid by ₹${Math.abs(summary.outstanding).toLocaleString("en-IN")}`}
-              </span>
-            </div>
-            <span className={`text-xl font-black ${summary.outstanding > 0 ? "text-red-600" : "text-green-600"}`}>
-              {fmt(Math.abs(summary.outstanding))}
-            </span>
-          </div>
-        )}
       </div>
     </>
   );
