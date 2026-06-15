@@ -93,9 +93,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : 0;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 overflow-hidden print:block print:h-auto print:overflow-visible">
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+      <aside className={`print:hidden fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="flex items-center justify-between px-4 h-16 border-b border-slate-800">
           <Link href={`/${slug}/dashboard`} className="flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
@@ -165,7 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+        <header className="print:hidden h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
           <button className="lg:hidden p-2 text-slate-600" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
@@ -210,7 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main className="flex-1 overflow-y-auto">
           {user.planStatus === "trial" && trialDaysLeft >= 0 && (
-            <div className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
+            <div className={`print:hidden px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 ${trialDaysLeft <= 2 ? "bg-red-500" : "bg-orange-500"} text-white`}>
               <span>
                 {trialDaysLeft === 0
                   ? "⚠️ Your free trial has ended."
@@ -223,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           )}
           {user.planStatus === "expired" && (
-            <div className="px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 bg-red-600 text-white">
+            <div className="print:hidden px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-4 bg-red-600 text-white">
               <span>🔒 Your subscription has expired. Renew to continue using BuildTrack.</span>
               <Link href={`/${slug}/dashboard/settings?tab=billing`} className="bg-white text-red-600 font-semibold text-xs px-3 py-1 rounded-lg flex-shrink-0 hover:bg-red-50">
                 Renew Now
