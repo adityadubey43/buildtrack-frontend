@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type VendorSummary, type VendorLedger, type Expense } from "@/lib/api";
+import { AddExpenseModal } from "@/components/financeModals";
 import { Plus, X, Store, ArrowLeft, AlertCircle, CheckCircle, Clock, Pencil } from "lucide-react";
 
 function fmt(n: number) {
@@ -112,22 +113,50 @@ function VendorModal({
 function LedgerView({
   ledger,
   onBack,
+  onRefresh,
 }: {
   ledger: VendorLedger;
   onBack: () => void;
+  onRefresh: () => void;
 }) {
   const { vendor, expenses, summary } = ledger;
+  const [projects, setProjects] = useState<{ _id: string; name: string }[]>([]);
+  const [showAddBill, setShowAddBill] = useState(false);
+
+  useEffect(() => {
+    api.projects.list({ status: "active", limit: "100" } as Record<string, string>)
+      .then((r) => setProjects(r.data))
+      .catch(() => {});
+  }, []);
 
   return (
+    <>
+      {showAddBill && (
+        <AddExpenseModal
+          projects={projects as never}
+          initialVendorId={vendor._id}
+          initialVendorName={vendor.name}
+          onClose={() => setShowAddBill(false)}
+          onSaved={() => { setShowAddBill(false); onRefresh(); }}
+        />
+      )}
     <div className="p-4 lg:p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{vendor.name}</h1>
-          <p className="text-slate-500 text-sm">{vendor.phone ?? ""}{vendor.gstNumber ? ` · GST: ${vendor.gstNumber}` : ""}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">{vendor.name}</h1>
+            <p className="text-slate-500 text-sm">{vendor.phone ?? ""}{vendor.gstNumber ? ` · GST: ${vendor.gstNumber}` : ""}</p>
+          </div>
         </div>
+        <button
+          onClick={() => setShowAddBill(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-orange-500/30"
+        >
+          <Plus className="w-4 h-4" /> Add Bill
+        </button>
       </div>
 
       {/* Tally summary bar */}
@@ -231,6 +260,7 @@ function LedgerView({
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -274,8 +304,16 @@ export default function VendorsPage() {
     finally { setMigrating(false); }
   };
 
+  const refreshLedger = useCallback(async () => {
+    if (!ledger) return;
+    try {
+      const res = await api.vendors.ledger(ledger.vendor._id);
+      setLedger(res.data);
+    } catch { /* ignore */ }
+  }, [ledger]);
+
   if (ledger) {
-    return <LedgerView ledger={ledger} onBack={() => setLedger(null)} />;
+    return <LedgerView ledger={ledger} onBack={() => setLedger(null)} onRefresh={refreshLedger} />;
   }
 
   const totalOutstanding = vendors.reduce((s, v) => s + v.outstanding, 0);

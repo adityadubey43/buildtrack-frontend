@@ -95,21 +95,37 @@ export function AddExpenseModal({
   projects,
   onClose,
   onSaved,
+  initialVendorId = "",
+  initialVendorName = "",
 }: {
   projects: Project[];
   onClose: () => void;
   onSaved: () => void;
+  initialVendorId?: string;
+  initialVendorName?: string;
 }) {
   const [form, setForm] = useState({
     project: "", type: "labour", description: "",
     amount: "", paidAmount: "",
     date: new Date().toISOString().split("T")[0],
-    vendorId: "", vendor: "", paymentMode: "cash", notes: "",
+    vendorId: initialVendorId, vendor: initialVendorName, paymentMode: "cash", notes: "",
   });
+  const [isPartial, setIsPartial] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // When bill amount changes, keep paidAmount in sync unless user toggled partial
+  const handleAmountChange = (v: string) => {
+    setForm((f) => ({ ...f, amount: v, paidAmount: isPartial ? f.paidAmount : v }));
+  };
+
+  const handlePartialToggle = (checked: boolean) => {
+    setIsPartial(checked);
+    if (!checked) setForm((f) => ({ ...f, paidAmount: f.amount }));
+    else setForm((f) => ({ ...f, paidAmount: "" }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,12 +133,13 @@ export function AddExpenseModal({
       setErr("Project, description, and amount are required.");
       return;
     }
+    const paid = isPartial ? Number(form.paidAmount) || 0 : Number(form.amount);
     setSaving(true); setErr("");
     try {
       await api.expenses.create({
         ...form,
         amount: Number(form.amount),
-        paidAmount: Number(form.paidAmount) || 0,
+        paidAmount: paid,
         vendorId: form.vendorId || null,
       });
       onSaved(); onClose();
@@ -130,6 +147,8 @@ export function AddExpenseModal({
       setErr(e instanceof Error ? e.message : "Failed to save.");
     } finally { setSaving(false); }
   };
+
+  const outstanding = Number(form.amount) - (isPartial ? Number(form.paidAmount) || 0 : Number(form.amount));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -180,30 +199,38 @@ export function AddExpenseModal({
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Bill Amount (₹) *</label>
+            <input type="number" min="0" step="0.01" value={form.amount}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              placeholder="0"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
+          </div>
+
+          {/* Partial payment toggle */}
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+            <input type="checkbox" checked={isPartial} onChange={(e) => handlePartialToggle(e.target.checked)}
+              className="rounded accent-orange-500" />
+            Partial payment — only some amount has been paid
+          </label>
+
+          {isPartial && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Bill Amount (₹) *</label>
-              <input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)}
-                placeholder="0"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Paid Amount (₹)</label>
-              <input type="number" min="0" step="0.01" value={form.paidAmount} onChange={(e) => set("paidAmount", e.target.value)}
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount Paid So Far (₹)</label>
+              <input type="number" min="0" step="0.01" value={form.paidAmount}
+                onChange={(e) => set("paidAmount", e.target.value)}
                 placeholder="0"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
-          </div>
+          )}
 
-          {form.amount && (
+          {form.amount && isPartial && (
             <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
-              Number(form.paidAmount) >= Number(form.amount)
-                ? "bg-green-50 text-green-700"
-                : Number(form.paidAmount) > 0
-                ? "bg-yellow-50 text-yellow-700"
-                : "bg-red-50 text-red-600"
+              outstanding <= 0 ? "bg-green-50 text-green-700"
+              : Number(form.paidAmount) > 0 ? "bg-yellow-50 text-yellow-700"
+              : "bg-red-50 text-red-600"
             }`}>
-              Outstanding: ₹{(Number(form.amount) - Number(form.paidAmount || 0)).toLocaleString("en-IN")}
+              Outstanding: ₹{Math.max(0, outstanding).toLocaleString("en-IN")}
             </div>
           )}
 
@@ -254,22 +281,34 @@ export function EditExpenseModal({
 }) {
   const projectId = typeof expense.project === "object" ? expense.project._id : expense.project as string;
   const existingVendorId = expense.vendorId && typeof expense.vendorId === "object" ? expense.vendorId._id : "";
+  const alreadyPartial = (expense.paidAmount ?? 0) < expense.amount && (expense.paidAmount ?? 0) > 0;
   const [form, setForm] = useState({
     project: projectId,
     type: expense.type,
     description: expense.description,
     amount: String(expense.amount),
-    paidAmount: String(expense.paidAmount ?? 0),
+    paidAmount: String(expense.paidAmount ?? expense.amount),
     date: expense.date.split("T")[0],
     vendorId: existingVendorId,
     vendor: expense.vendor ?? "",
     paymentMode: expense.paymentMode,
     notes: expense.notes ?? "",
   });
+  const [isPartial, setIsPartial] = useState(alreadyPartial || (expense.paidAmount ?? expense.amount) < expense.amount);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleAmountChange = (v: string) => {
+    setForm((f) => ({ ...f, amount: v, paidAmount: isPartial ? f.paidAmount : v }));
+  };
+
+  const handlePartialToggle = (checked: boolean) => {
+    setIsPartial(checked);
+    if (!checked) setForm((f) => ({ ...f, paidAmount: f.amount }));
+    else setForm((f) => ({ ...f, paidAmount: "" }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,12 +316,13 @@ export function EditExpenseModal({
       setErr("Project, description, and amount are required.");
       return;
     }
+    const paid = isPartial ? Number(form.paidAmount) || 0 : Number(form.amount);
     setSaving(true); setErr("");
     try {
       await api.expenses.update(expense._id, {
         ...form,
         amount: Number(form.amount),
-        paidAmount: Number(form.paidAmount) || 0,
+        paidAmount: paid,
         vendorId: form.vendorId || null,
       });
       onSaved(); onClose();
@@ -290,6 +330,8 @@ export function EditExpenseModal({
       setErr(e instanceof Error ? e.message : "Failed to save.");
     } finally { setSaving(false); }
   };
+
+  const outstanding = Number(form.amount) - (isPartial ? Number(form.paidAmount) || 0 : Number(form.amount));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -339,26 +381,35 @@ export function EditExpenseModal({
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Bill Amount (₹) *</label>
-              <input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Paid Amount (₹)</label>
-              <input type="number" min="0" step="0.01" value={form.paidAmount} onChange={(e) => set("paidAmount", e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Bill Amount (₹) *</label>
+            <input type="number" min="0" step="0.01" value={form.amount}
+              onChange={(e) => handleAmountChange(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" required />
           </div>
 
-          {form.amount && (
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+            <input type="checkbox" checked={isPartial} onChange={(e) => handlePartialToggle(e.target.checked)}
+              className="rounded accent-orange-500" />
+            Partial payment — only some amount has been paid
+          </label>
+
+          {isPartial && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount Paid So Far (₹)</label>
+              <input type="number" min="0" step="0.01" value={form.paidAmount}
+                onChange={(e) => set("paidAmount", e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+          )}
+
+          {form.amount && isPartial && (
             <div className={`rounded-lg px-3 py-2 text-xs font-medium ${
-              Number(form.paidAmount) >= Number(form.amount) ? "bg-green-50 text-green-700"
+              outstanding <= 0 ? "bg-green-50 text-green-700"
               : Number(form.paidAmount) > 0 ? "bg-yellow-50 text-yellow-700"
               : "bg-red-50 text-red-600"
             }`}>
-              Outstanding: ₹{(Number(form.amount) - Number(form.paidAmount || 0)).toLocaleString("en-IN")}
+              Outstanding: ₹{Math.max(0, outstanding).toLocaleString("en-IN")}
             </div>
           )}
 
