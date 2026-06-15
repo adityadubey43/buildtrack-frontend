@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type Expense, type Project } from "@/lib/api";
-import { AddExpenseModal } from "@/components/financeModals";
-import { Plus, X, TrendingDown, Filter } from "lucide-react";
+import { AddExpenseModal, EditExpenseModal } from "@/components/financeModals";
+import { getUser } from "@/lib/store";
+import { Plus, X, TrendingDown, Filter, Pencil } from "lucide-react";
 
 function formatINR(n: number) {
   if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
@@ -23,6 +24,8 @@ export default function ExpensesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const isAdmin = getUser()?.role === "admin";
 
   const [filterProject, setFilterProject] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -76,6 +79,14 @@ export default function ExpensesPage() {
         <AddExpenseModal
           projects={projects}
           onClose={() => setShowModal(false)}
+          onSaved={loadExpenses}
+        />
+      )}
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          projects={projects}
+          onClose={() => setEditingExpense(null)}
           onSaved={loadExpenses}
         />
       )}
@@ -207,6 +218,15 @@ export default function ExpensesPage() {
                     <p className="text-sm font-bold text-rose-600">{formatINR(exp.amount)}</p>
                     <p className="text-xs text-slate-400">{new Date(exp.date).toLocaleDateString("en-IN")}</p>
                   </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setEditingExpense(exp)}
+                      className="text-slate-300 hover:text-blue-500 transition-colors flex-shrink-0 ml-1"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(exp._id)}
                     className="text-slate-300 hover:text-red-500 transition-colors flex-shrink-0 ml-1"

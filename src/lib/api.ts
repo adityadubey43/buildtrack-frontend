@@ -258,6 +258,18 @@ export const api = {
     delete: (id: string) => request(`/expenses/${id}`, { method: "DELETE" }),
   },
 
+  // ── Vendors ──
+  vendors: {
+    list:    () => request<{ success: boolean; count: number; data: Vendor[] }>("/vendors"),
+    summary: () => request<{ success: boolean; data: VendorSummary[] }>("/vendors/summary"),
+    create:  (body: { name: string; phone?: string; gstNumber?: string; address?: string; notes?: string }) =>
+      request<{ success: boolean; data: Vendor }>("/vendors", { method: "POST", body: JSON.stringify(body) }),
+    update:  (id: string, body: Partial<Vendor>) =>
+      request<{ success: boolean; data: Vendor }>(`/vendors/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    ledger:  (id: string) => request<{ success: boolean; data: VendorLedger }>(`/vendors/${id}/ledger`),
+    migrate: () => request<{ success: boolean; message: string }>("/vendors/migrate", { method: "POST" }),
+  },
+
   // ── Payments Received ──
   payments: {
     list: (params?: Record<string, string>) =>
@@ -603,14 +615,40 @@ export interface MaintenanceLog {
   nextDueDate?: string;
 }
 
+export interface Vendor {
+  _id: string;
+  name: string;
+  phone?: string;
+  gstNumber?: string;
+  address?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface VendorSummary extends Vendor {
+  totalBilled: number;
+  totalPaid: number;
+  outstanding: number;
+  expenseCount: number;
+  lastDate?: string;
+}
+
+export interface VendorLedger {
+  vendor: Vendor;
+  expenses: Expense[];
+  summary: { totalBilled: number; totalPaid: number; outstanding: number };
+}
+
 export interface Expense {
   _id: string;
   project: { _id: string; name: string; location: string };
   type: "labour" | "material" | "miscellaneous" | "travel";
   description: string;
   amount: number;
+  paidAmount: number;
   date: string;
   vendor?: string;
+  vendorId?: { _id: string; name: string; phone?: string } | null;
   paymentMode: string;
   notes?: string;
   attachments: { url: string; name: string }[];
@@ -622,8 +660,10 @@ export interface ExpenseInput {
   type: string;
   description: string;
   amount: number;
+  paidAmount?: number;
   date?: string;
   vendor?: string;
+  vendorId?: string | null;
   paymentMode?: string;
   notes?: string;
   attachments?: { url: string; name: string }[];

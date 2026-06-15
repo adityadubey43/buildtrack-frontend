@@ -1,0 +1,422 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { api, type VendorSummary, type VendorLedger, type Expense } from "@/lib/api";
+import { Plus, X, Store, ArrowLeft, AlertCircle, CheckCircle, Clock, Pencil } from "lucide-react";
+
+function fmt(n: number) {
+  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
+  if (n >= 100000)   return `₹${(n / 100000).toFixed(1)} L`;
+  return `₹${n.toLocaleString("en-IN")}`;
+}
+
+// ── Add / Edit Vendor Modal ────────────────────────────────────────────────────
+function VendorModal({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial?: VendorSummary;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    name:      initial?.name      ?? "",
+    phone:     initial?.phone     ?? "",
+    gstNumber: initial?.gstNumber ?? "",
+    address:   initial?.address   ?? "",
+    notes:     initial?.notes     ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState("");
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setErr("Vendor name is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      if (initial) {
+        await api.vendors.update(initial._id, form);
+      } else {
+        await api.vendors.create(form);
+      }
+      onSaved(); onClose();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to save vendor.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <h2 className="font-bold text-slate-900 text-lg">{initial ? "Edit Vendor" : "Add Vendor"}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {err && <p className="text-red-600 text-sm bg-red-50 rounded-lg p-3">{err}</p>}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+            <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)}
+              placeholder="Vendor / supplier name" required
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+              <input type="text" value={form.phone} onChange={(e) => set("phone", e.target.value)}
+                placeholder="Mobile number"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label>
+              <input type="text" value={form.gstNumber} onChange={(e) => set("gstNumber", e.target.value)}
+                placeholder="15-digit GSTIN"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+            <input type="text" value={form.address} onChange={(e) => set("address", e.target.value)}
+              placeholder="Shop / office address"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2}
+              placeholder="Any additional details..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={saving}
+              className="flex-1 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-xl text-sm font-semibold">
+              {saving ? "Saving..." : initial ? "Save Changes" : "Add Vendor"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Ledger View ────────────────────────────────────────────────────────────────
+function LedgerView({
+  ledger,
+  onBack,
+}: {
+  ledger: VendorLedger;
+  onBack: () => void;
+}) {
+  const { vendor, expenses, summary } = ledger;
+
+  return (
+    <div className="p-4 lg:p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">{vendor.name}</h1>
+          <p className="text-slate-500 text-sm">{vendor.phone ?? ""}{vendor.gstNumber ? ` · GST: ${vendor.gstNumber}` : ""}</p>
+        </div>
+      </div>
+
+      {/* Tally summary bar */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Total Billed</div>
+          <div className="text-2xl font-black text-slate-800">{fmt(summary.totalBilled)}</div>
+        </div>
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
+          <div className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">Total Paid</div>
+          <div className="text-2xl font-black text-green-700">{fmt(summary.totalPaid)}</div>
+        </div>
+        <div className={`rounded-2xl p-4 text-center border ${
+          summary.outstanding <= 0
+            ? "bg-green-50 border-green-100"
+            : "bg-red-50 border-red-100"
+        }`}>
+          <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${summary.outstanding <= 0 ? "text-green-600" : "text-red-500"}`}>
+            Outstanding
+          </div>
+          <div className={`text-2xl font-black ${summary.outstanding <= 0 ? "text-green-700" : "text-red-600"}`}>
+            {summary.outstanding <= 0 ? "Cleared" : fmt(summary.outstanding)}
+          </div>
+        </div>
+      </div>
+
+      {/* Expense ledger table */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-bold text-slate-900">Expense Ledger</h2>
+          <span className="text-xs text-slate-400">{expenses.length} entries</span>
+        </div>
+
+        {expenses.length === 0 ? (
+          <div className="p-10 text-center text-slate-400 text-sm">No expenses linked to this vendor yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-500 font-semibold">
+                  <th className="px-4 py-3 text-left">Date</th>
+                  <th className="px-4 py-3 text-left">Description</th>
+                  <th className="px-4 py-3 text-left">Project</th>
+                  <th className="px-4 py-3 text-right">Bill (₹)</th>
+                  <th className="px-4 py-3 text-right">Paid (₹)</th>
+                  <th className="px-4 py-3 text-right">Outstanding</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {expenses.map((exp: Expense) => {
+                  const outstanding = exp.amount - (exp.paidAmount ?? 0);
+                  const isCleared  = outstanding <= 0;
+                  const isPartial  = !isCleared && (exp.paidAmount ?? 0) > 0;
+                  return (
+                    <tr key={exp._id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                        {new Date(exp.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })}
+                      </td>
+                      <td className="px-4 py-3 text-slate-800 max-w-[180px] truncate">{exp.description}</td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                        {(exp.project as { name?: string })?.name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-slate-900">{fmt(exp.amount)}</td>
+                      <td className="px-4 py-3 text-right text-green-700">{fmt(exp.paidAmount ?? 0)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${isCleared ? "text-green-600" : "text-red-600"}`}>
+                        {isCleared ? "—" : fmt(outstanding)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isCleared ? (
+                          <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full w-fit">
+                            <CheckCircle className="w-3 h-3" /> Cleared
+                          </span>
+                        ) : isPartial ? (
+                          <span className="flex items-center gap-1 text-xs text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full w-fit">
+                            <Clock className="w-3 h-3" /> Partial
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full w-fit">
+                            <AlertCircle className="w-3 h-3" /> Unpaid
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 border-t-2 border-slate-200 font-bold text-sm">
+                  <td colSpan={3} className="px-4 py-3 text-slate-700">Total</td>
+                  <td className="px-4 py-3 text-right text-slate-900">{fmt(summary.totalBilled)}</td>
+                  <td className="px-4 py-3 text-right text-green-700">{fmt(summary.totalPaid)}</td>
+                  <td className={`px-4 py-3 text-right ${summary.outstanding <= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {summary.outstanding <= 0 ? "Cleared" : fmt(summary.outstanding)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+export default function VendorsPage() {
+  const [vendors, setVendors]       = useState<VendorSummary[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [migrating, setMigrating]   = useState(false);
+  const [showModal, setShowModal]   = useState(false);
+  const [editVendor, setEditVendor] = useState<VendorSummary | undefined>();
+  const [ledger, setLedger]         = useState<VendorLedger | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  const loadVendors = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.vendors.summary();
+      setVendors(res.data);
+    } catch { setVendors([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadVendors(); }, [loadVendors]);
+
+  const openLedger = async (vendorId: string) => {
+    setLedgerLoading(true);
+    try {
+      const res = await api.vendors.ledger(vendorId);
+      setLedger(res.data);
+    } catch { /* ignore */ }
+    finally { setLedgerLoading(false); }
+  };
+
+  const handleMigrate = async () => {
+    setMigrating(true);
+    try {
+      const res = await api.vendors.migrate();
+      alert(res.message);
+      await loadVendors();
+    } catch { alert("Migration failed."); }
+    finally { setMigrating(false); }
+  };
+
+  if (ledger) {
+    return <LedgerView ledger={ledger} onBack={() => setLedger(null)} />;
+  }
+
+  const totalOutstanding = vendors.reduce((s, v) => s + v.outstanding, 0);
+  const totalBilled      = vendors.reduce((s, v) => s + v.totalBilled, 0);
+  const totalPaid        = vendors.reduce((s, v) => s + v.totalPaid, 0);
+
+  return (
+    <>
+      {(showModal || editVendor) && (
+        <VendorModal
+          initial={editVendor}
+          onClose={() => { setShowModal(false); setEditVendor(undefined); }}
+          onSaved={() => { setShowModal(false); setEditVendor(undefined); loadVendors(); }}
+        />
+      )}
+
+      <div className="p-4 lg:p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Vendors</h1>
+            <p className="text-slate-500 text-sm mt-0.5">Track bills and payments for every supplier</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleMigrate}
+              disabled={migrating}
+              className="px-3 py-2 text-xs border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              title="Import vendors from existing expense entries"
+            >
+              {migrating ? "Importing..." : "Import from Expenses"}
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-orange-500/30"
+            >
+              <Plus className="w-4 h-4" /> Add Vendor
+            </button>
+          </div>
+        </div>
+
+        {/* Summary strip */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
+            <div className="text-xs text-slate-500 font-medium mb-1">Total Billed</div>
+            <div className="text-xl font-black text-slate-800">{fmt(totalBilled)}</div>
+          </div>
+          <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
+            <div className="text-xs text-green-600 font-medium mb-1">Total Paid</div>
+            <div className="text-xl font-black text-green-700">{fmt(totalPaid)}</div>
+          </div>
+          <div className={`rounded-2xl p-4 text-center border ${totalOutstanding > 0 ? "bg-red-50 border-red-100" : "bg-green-50 border-green-100"}`}>
+            <div className={`text-xs font-medium mb-1 ${totalOutstanding > 0 ? "text-red-500" : "text-green-600"}`}>Total Outstanding</div>
+            <div className={`text-xl font-black ${totalOutstanding > 0 ? "text-red-600" : "text-green-700"}`}>{fmt(totalOutstanding)}</div>
+          </div>
+        </div>
+
+        {/* Vendor list */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100">
+            <h2 className="font-bold text-slate-900">All Vendors</h2>
+          </div>
+
+          {loading ? (
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 bg-slate-100 rounded-lg animate-pulse" />)}
+            </div>
+          ) : vendors.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">
+              <Store className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No vendors yet.</p>
+              <p className="text-xs mt-1">Add a vendor or use &quot;Import from Expenses&quot; to pull in names from existing entries.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {vendors.map((v) => {
+                const isCleared = v.outstanding <= 0;
+                const isPartial = !isCleared && v.totalPaid > 0;
+                return (
+                  <div
+                    key={v._id}
+                    className="flex items-center gap-4 px-4 lg:px-5 py-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                    onClick={() => !ledgerLoading && openLedger(v._id)}
+                  >
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Store className="w-5 h-5 text-orange-600" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">{v.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {v.phone ?? ""}
+                        {v.phone && v.gstNumber ? " · " : ""}
+                        {v.gstNumber ? `GST: ${v.gstNumber}` : ""}
+                        {!v.phone && !v.gstNumber ? `${v.expenseCount} expense${v.expenseCount !== 1 ? "s" : ""}` : ""}
+                      </p>
+                    </div>
+
+                    {/* Tally numbers */}
+                    <div className="hidden sm:flex items-center gap-6 text-right">
+                      <div>
+                        <p className="text-xs text-slate-400">Billed</p>
+                        <p className="text-sm font-medium text-slate-700">{fmt(v.totalBilled)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400">Paid</p>
+                        <p className="text-sm font-medium text-green-600">{fmt(v.totalPaid)}</p>
+                      </div>
+                      <div className="min-w-[80px]">
+                        <p className="text-xs text-slate-400">Outstanding</p>
+                        <p className={`text-sm font-bold ${isCleared ? "text-green-600" : "text-red-600"}`}>
+                          {isCleared ? "Cleared" : fmt(v.outstanding)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status badge */}
+                    <div className="flex-shrink-0">
+                      {isCleared ? (
+                        <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">Cleared</span>
+                      ) : isPartial ? (
+                        <span className="text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full font-medium">Partial</span>
+                      ) : (
+                        <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">Unpaid</span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditVendor(v); }}
+                      className="text-slate-300 hover:text-blue-500 transition-colors flex-shrink-0"
+                      title="Edit vendor"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
