@@ -218,6 +218,7 @@ export const api = {
     list: (params?: Record<string, string>) =>
       request<ListResponse<Invoice>>(`/invoices${toQuery(params)}`),
     get: (id: string) => request<SingleResponse<Invoice>>(`/invoices/${id}`),
+    print: (id: string) => request<SingleResponse<Invoice>>(`/invoices/${id}/print`),
     create: (body: InvoiceInput) =>
       request<SingleResponse<Invoice>>("/invoices", { method: "POST", body: JSON.stringify(body) }),
     update: (id: string, body: Partial<InvoiceInput>) =>
@@ -225,6 +226,9 @@ export const api = {
     recordPayment: (id: string, body: { amount: number; date: string; mode?: string; reference?: string; notes?: string }) =>
       request<SingleResponse<Invoice>>(`/invoices/${id}/payment`, { method: "POST", body: JSON.stringify(body) }),
     summary: () => request<{ success: boolean; data: InvoiceSummary }>("/invoices/summary"),
+    getSettings: () => request<{ success: boolean; data: InvoiceSettings }>("/auth/invoice-settings"),
+    updateSettings: (body: InvoiceSettings) =>
+      request<{ success: boolean; data: InvoiceSettings }>("/auth/invoice-settings", { method: "PUT", body: JSON.stringify(body) }),
   },
 
   // Team ──
@@ -541,45 +545,102 @@ export interface MaterialTransaction {
 
 export interface InvoiceItem {
   description: string;
+  hsnCode?: string;
+  unit?: string;
   quantity: number;
   rate: number;
   amount: number;
+  gstRate?: number;
+}
+
+export interface InvoiceTaxLine {
+  gstRate: number;
+  taxableAmount: number;
+  cgstRate?: number; cgstAmount?: number;
+  sgstRate?: number; sgstAmount?: number;
+  igstRate?: number; igstAmount?: number;
+}
+
+export interface InvoiceCompany {
+  name?: string; address?: string; gstin?: string; stateCode?: string;
+  phone?: string; email?: string; logo?: string;
+  bankName?: string; accountNumber?: string; ifsc?: string; accountHolder?: string;
+  upiId?: string; signature?: string; pan?: string;
+}
+
+export interface InvoiceClient {
+  name: string; address?: string; gstin?: string; stateCode?: string;
+  phone?: string; email?: string;
 }
 
 export interface Invoice {
   _id: string;
   invoiceNumber: string;
-  project: { _id: string; name: string };
-  clientName: string;
-  clientAddress?: string;
-  clientGST?: string;
+  invoiceDate: string;
+  dueDate?: string;
+  project?: { _id: string; name: string; location?: string };
+  projectName?: string;
+  siteName?: string;
+  siteLocation?: string;
+  workType?: string;
+  company: InvoiceCompany;
+  client: InvoiceClient;
+  // backward compat
+  clientName?: string;
   milestone?: string;
   items: InvoiceItem[];
   subtotal: number;
-  gstRate: number;
-  gstAmount: number;
+  discountType?: string; discountValue?: number; discountAmount?: number;
+  taxableAmount?: number;
+  gstType?: 'intra' | 'inter';
+  taxLines?: InvoiceTaxLine[];
+  totalTax?: number;
+  additionalCharges?: { label: string; amount: number }[];
+  additionalChargesTotal?: number;
+  tdsRate?: number; tdsAmount?: number;
+  roundOff?: number;
   totalAmount: number;
   paidAmount: number;
   balanceAmount: number;
-  invoiceDate: string;
-  dueDate: string;
   status: string;
-  payments: { amount: number; date: string; mode: string }[];
+  recurring?: { type: string; milestone?: string; nextDueDate?: string };
+  reverseCharge?: boolean;
+  terms?: string;
   notes?: string;
+  paymentInstructions?: string;
+  payments: { amount: number; date: string; mode: string; reference?: string; notes?: string }[];
+  // backward compat
+  gstRate?: number; gstAmount?: number;
+  createdAt?: string;
 }
 
 export interface InvoiceInput {
-  project: string;
-  clientName: string;
-  clientAddress?: string;
-  clientGST?: string;
-  milestone?: string;
+  client: InvoiceClient;
+  invoiceDate?: string;
+  dueDate?: string;
+  project?: string;
+  projectName?: string;
+  siteName?: string;
+  siteLocation?: string;
+  workType?: string;
   items: InvoiceItem[];
-  gstRate?: number;
-  invoiceDate: string;
-  dueDate: string;
+  discountType?: string; discountValue?: number;
+  gstType?: string;
+  additionalCharges?: { label: string; amount: number }[];
+  tdsRate?: number;
+  reverseCharge?: boolean;
+  recurring?: { type: string; milestone?: string; nextDueDate?: string };
+  terms?: string;
   notes?: string;
-  status?: string;
+  paymentInstructions?: string;
+}
+
+export interface InvoiceSettings {
+  companyName?: string; address?: string; phone?: string; gstin?: string; logo?: string;
+  email?: string; pan?: string; stateCode?: string;
+  bankName?: string; accountNumber?: string; ifsc?: string; accountHolder?: string;
+  upiId?: string; signature?: string;
+  defaultTerms?: string; defaultPaymentInstructions?: string;
 }
 
 export interface InvoiceSummary {
