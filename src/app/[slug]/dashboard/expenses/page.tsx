@@ -7,9 +7,7 @@ import { getUser } from "@/lib/store";
 import { Plus, X, TrendingDown, Filter, Pencil } from "lucide-react";
 
 function formatINR(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)} L`;
-  return `₹${n.toLocaleString("en-IN")}`;
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -21,6 +19,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [totalAmount, setTotalAmount] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -48,6 +47,7 @@ export default function ExpensesPage() {
     try {
       const res = await api.expenses.list(params);
       setExpenses([...res.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      setTotalAmount(res.totalAmount ?? 0);
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -70,7 +70,7 @@ export default function ExpensesPage() {
     setFilterProject(""); setFilterType(""); setFilterFrom(""); setFilterTo("");
   };
 
-  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const total = totalAmount;
   const hasFilters = filterProject || filterType || filterFrom || filterTo;
 
   return (

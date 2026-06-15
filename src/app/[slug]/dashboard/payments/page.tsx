@@ -7,9 +7,7 @@ import { getUser } from "@/lib/store";
 import { Plus, Wallet, Filter, Pencil } from "lucide-react";
 
 function formatINR(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)} L`;
-  return `₹${n.toLocaleString("en-IN")}`;
+  return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const MODE_COLORS: Record<string, string> = {
@@ -22,6 +20,7 @@ const MODE_COLORS: Record<string, string> = {
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentReceived[]>([]);
+  const [totalAmount, setTotalAmount] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -47,6 +46,7 @@ export default function PaymentsPage() {
     try {
       const res = await api.payments.list(params);
       setPayments([...res.data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      setTotalAmount(res.totalAmount ?? 0);
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export default function PaymentsPage() {
 
   const clearFilters = () => { setFilterProject(""); setFilterFrom(""); setFilterTo(""); };
 
-  const total = payments.reduce((s, p) => s + p.amount, 0);
+  const total = totalAmount;
   const hasFilters = filterProject || filterFrom || filterTo;
 
   return (

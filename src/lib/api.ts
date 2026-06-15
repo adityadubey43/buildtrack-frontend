@@ -132,6 +132,8 @@ export const api = {
       request<SingleResponse<Project>>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     updatePhase: (id: string, body: { phaseId: string; completionPct: number }) =>
       request<SingleResponse<Project>>(`/projects/${id}/phase`, { method: "PUT", body: JSON.stringify(body) }),
+    updateStages: (id: string, stages: { _id?: string; name: string; weight: number; isCompleted: boolean }[]) =>
+      request<SingleResponse<Project>>(`/projects/${id}/stages`, { method: "PUT", body: JSON.stringify({ stages }) }),
     delete: (id: string) => request(`/projects/${id}`, { method: "DELETE" }),
     stats: () => request<{ success: boolean; data: ProjectStats }>("/projects/stats"),
   },
@@ -270,6 +272,7 @@ export const api = {
     migrate: () => request<{ success: boolean; message: string }>("/vendors/migrate", { method: "POST" }),
     addBill: (vendorId: string, body: { amount: number; date: string; description?: string; invoiceNumber?: string; project?: string; notes?: string }) =>
       request<{ success: boolean; data: VendorBill }>(`/vendors/${vendorId}/bills`, { method: "POST", body: JSON.stringify(body) }),
+    delete:     (id: string) => request(`/vendors/${id}`, { method: "DELETE" }),
     deleteBill: (billId: string) => request(`/vendors/bills/${billId}`, { method: "DELETE" }),
   },
 
@@ -320,6 +323,7 @@ export interface AuthResponse {
 export interface ListResponse<T> {
   success: boolean;
   count: number;
+  totalAmount?: number;
   data: T[];
 }
 
@@ -341,7 +345,7 @@ export interface Project {
   currentPhase: string;
   overallProgress: number;
   status: string;
-  phases: { _id: string; name: string; completionPct: number; isCompleted: boolean }[];
+  phases: { _id: string; name: string; weight: number; completionPct: number; isCompleted: boolean; completedAt?: string }[];
 }
 
 export interface Worker {
