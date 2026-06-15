@@ -25,6 +25,7 @@ export default function BillingPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [form, setForm] = useState({ project: "", clientName: "", milestone: "", amount: "", dueDate: "" });
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: "", date: "", mode: "bank", reference: "", notes: "" });
@@ -82,6 +83,7 @@ export default function BillingPage() {
 
   const closePaymentModal = () => {
     setPaymentInvoice(null);
+    setPaymentError("");
     setPaymentForm({ amount: "", date: "", mode: "bank", reference: "", notes: "" });
   };
 
@@ -91,6 +93,7 @@ export default function BillingPage() {
     if (Number.isNaN(amount) || amount <= 0) return;
 
     setPaymentSaving(true);
+    setPaymentError("");
     try {
       const inv = await api.invoices.recordPayment(paymentInvoice._id, {
         amount,
@@ -99,10 +102,10 @@ export default function BillingPage() {
         reference: paymentForm.reference,
         notes: paymentForm.notes,
       });
-      setInvoices((prev) => prev.map((i) => i._id === paymentInvoice._id ? inv.data : i));
+      setInvoices((prev) => sortInvoices(prev.map((i) => i._id === paymentInvoice._id ? inv.data : i)));
       closePaymentModal();
     } catch (err) {
-      console.error(err);
+      setPaymentError(err instanceof Error ? err.message : "Failed to record payment. Please try again.");
     } finally {
       setPaymentSaving(false);
     }
@@ -262,6 +265,9 @@ export default function BillingPage() {
               <button onClick={closePaymentModal} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
             <div className="p-5 space-y-4">
+              {paymentError && (
+                <p className="text-red-600 text-sm bg-red-50 rounded-lg p-3">{paymentError}</p>
+              )}
               <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
                 <div className="font-medium">Amount due</div>
                 <div className="text-xl font-semibold text-slate-900">{fmt(paymentInvoice.balanceAmount)}</div>

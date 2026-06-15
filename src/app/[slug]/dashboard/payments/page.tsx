@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type PaymentReceived, type Project } from "@/lib/api";
-import { AddPaymentModal } from "@/components/financeModals";
-import { Plus, Wallet, Filter } from "lucide-react";
+import { AddPaymentModal, EditPaymentModal } from "@/components/financeModals";
+import { getUser } from "@/lib/store";
+import { Plus, Wallet, Filter, Pencil } from "lucide-react";
 
 function formatINR(n: number) {
   if (n >= 10000000) return `₹${(n / 10000000).toFixed(1)} Cr`;
@@ -24,6 +25,8 @@ export default function PaymentsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentReceived | null>(null);
+  const isAdmin = getUser()?.role === "admin";
 
   const [filterProject, setFilterProject] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -63,6 +66,14 @@ export default function PaymentsPage() {
         <AddPaymentModal
           projects={projects}
           onClose={() => setShowModal(false)}
+          onSaved={loadPayments}
+        />
+      )}
+      {editingPayment && (
+        <EditPaymentModal
+          payment={editingPayment}
+          projects={projects}
+          onClose={() => setEditingPayment(null)}
           onSaved={loadPayments}
         />
       )}
@@ -180,6 +191,15 @@ export default function PaymentsPage() {
                     <p className="text-sm font-bold text-green-600">{formatINR(pay.amount)}</p>
                     <p className="text-xs text-slate-400">{new Date(pay.date).toLocaleDateString("en-IN")}</p>
                   </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setEditingPayment(pay)}
+                      className="text-slate-300 hover:text-blue-500 transition-colors flex-shrink-0 ml-1"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

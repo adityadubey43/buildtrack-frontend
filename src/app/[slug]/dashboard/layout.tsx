@@ -10,7 +10,7 @@ import {
   Building2, LayoutDashboard, FolderOpen, Users, Calculator,
   Package, FileText, BarChart3, Bell, Settings, LogOut,
   Menu, X, ChevronDown, Camera, Receipt, Wrench, UserCheck,
-  TrendingDown, Wallet,
+  TrendingDown, Wallet, Store,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { setUser } from "@/lib/store";
@@ -29,6 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: `/${slug}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
     { href: `/${slug}/dashboard/projects`, label: "Projects", icon: FolderOpen },
     { href: `/${slug}/dashboard/expenses`, label: "Expenses", icon: TrendingDown },
+    { href: `/${slug}/dashboard/vendors`,  label: "Vendors", icon: Store },
     { href: `/${slug}/dashboard/payments`, label: "Payments Received", icon: Wallet },
     { href: `/${slug}/dashboard/attendance/labour`, label: "Site Workers", icon: Camera },
     { href: `/${slug}/dashboard/attendance/employee`, label: "Staff Attendance", icon: UserCheck },

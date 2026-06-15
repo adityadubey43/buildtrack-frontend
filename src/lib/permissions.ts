@@ -36,6 +36,7 @@ export const ROLE_ROUTES: Record<string, string[]> = {
     "/dashboard/payroll",
     "/dashboard/billing",
     "/dashboard/expenses",
+    "/dashboard/vendors",
     "/dashboard/payments",
     "/dashboard/analytics",
     "/dashboard/staff-details",

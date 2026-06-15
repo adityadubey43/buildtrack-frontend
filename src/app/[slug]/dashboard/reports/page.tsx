@@ -271,8 +271,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [projectFilter, setProjectFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const todayISO = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(todayISO);
+  const [endDate, setEndDate] = useState(todayISO);
 
   const loadDPRs = useCallback(async (params: Record<string, string> = {}) => {
     setLoading(true);
