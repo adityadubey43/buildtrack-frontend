@@ -268,6 +268,9 @@ export const api = {
       request<{ success: boolean; data: Vendor }>(`/vendors/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     ledger:  (id: string) => request<{ success: boolean; data: VendorLedger }>(`/vendors/${id}/ledger`),
     migrate: () => request<{ success: boolean; message: string }>("/vendors/migrate", { method: "POST" }),
+    addBill: (vendorId: string, body: { amount: number; date: string; description?: string; invoiceNumber?: string; project?: string; notes?: string }) =>
+      request<{ success: boolean; data: VendorBill }>(`/vendors/${vendorId}/bills`, { method: "POST", body: JSON.stringify(body) }),
+    deleteBill: (billId: string) => request(`/vendors/bills/${billId}`, { method: "DELETE" }),
   },
 
   // ── Payments Received ──
@@ -629,12 +632,26 @@ export interface VendorSummary extends Vendor {
   totalBilled: number;
   totalPaid: number;
   outstanding: number;
+  billCount: number;
   expenseCount: number;
   lastDate?: string;
 }
 
+export interface VendorBill {
+  _id: string;
+  vendorId: string;
+  amount: number;
+  date: string;
+  description?: string;
+  invoiceNumber?: string;
+  project?: { _id: string; name: string } | null;
+  notes?: string;
+  recordedBy?: { _id: string; name: string };
+}
+
 export interface VendorLedger {
   vendor: Vendor;
+  bills: VendorBill[];
   expenses: Expense[];
   summary: { totalBilled: number; totalPaid: number; outstanding: number };
 }
