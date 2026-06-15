@@ -321,6 +321,7 @@ export interface AuthResponse {
 export interface ListResponse<T> {
   success: boolean;
   count: number;
+  totalAmount?: number;
   data: T[];
 }
 
