@@ -492,8 +492,10 @@ export default function VendorsPage() {
           ) : (
             <div className="divide-y divide-slate-50">
               {vendors.map((v) => {
-                const isCleared = v.outstanding <= 0;
-                const isPartial = !isCleared && v.totalPaid > 0;
+                const isAdvance  = v.totalBilled === 0 && v.totalPaid > 0;
+                const isCleared  = v.totalBilled === 0 && v.totalPaid === 0;
+                const isFullPaid = v.totalBilled > 0 && v.totalPaid >= v.totalBilled;
+                const isPartial  = v.totalBilled > 0 && v.totalPaid > 0 && v.totalPaid < v.totalBilled;
                 return (
                   <div key={v._id}
                     className="flex items-center gap-4 px-4 lg:px-5 py-4 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -525,18 +527,24 @@ export default function VendorsPage() {
                       </div>
                       <div className="min-w-[80px]">
                         <p className="text-xs text-slate-400">Outstanding</p>
-                        <p className={`text-sm font-bold ${isCleared ? "text-green-600" : "text-red-600"}`}>
-                          {isCleared ? "Cleared" : fmt(v.outstanding)}
+                        <p className={`text-sm font-bold ${isAdvance ? "text-blue-600" : (isCleared || isFullPaid) ? "text-green-600" : "text-red-600"}`}>
+                          {isAdvance ? `Adv ${fmt(v.totalPaid)}` : (isCleared || isFullPaid) ? "Cleared" : fmt(v.outstanding)}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex-shrink-0">
-                      {v.totalBilled === 0 ? (
-                        <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">No bills</span>
+                      {isAdvance ? (
+                        <span className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                          <CheckCircle className="w-3 h-3" /> Advance
+                        </span>
                       ) : isCleared ? (
-                        <span className="flex items-center gap-1 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">
+                        <span className="flex items-center gap-1 text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
                           <CheckCircle className="w-3 h-3" /> Cleared
+                        </span>
+                      ) : isFullPaid ? (
+                        <span className="flex items-center gap-1 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">
+                          <CheckCircle className="w-3 h-3" /> Paid
                         </span>
                       ) : isPartial ? (
                         <span className="flex items-center gap-1 text-xs bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full font-medium">
